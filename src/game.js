@@ -49,7 +49,6 @@ import {
   const roundLabel = document.getElementById('round-label');
   const kpsEl = document.getElementById('kps-val');
   const rosterEl = document.getElementById('roster');
-  const feedEl = document.getElementById('feed');
   const p2HintEl = document.getElementById('p2-hint');
 
   // Multiplayer DOM
@@ -152,7 +151,6 @@ import {
     beams: [],          // { pts: [[gx, gy], ...], color, life, maxLife, width }
     particles: [],      // { gx, gy, vx, vy, life, maxLife, rTiles, color }
     wins: {},
-    feed: [],
     roundOver: false,
     roundWinner: null,
     roundTimer: 0,
@@ -194,25 +192,6 @@ import {
 
   function markStateDirty() {
     if (state.netRole === 'host') deltaDirty = true;
-  }
-
-  function addFeed(msg, color, broadcast = true) {
-    state.feed.unshift({ msg, color: color || theme.muted });
-    if (state.feed.length > 5) state.feed.length = 5;
-    renderFeed();
-    if (broadcast && state.netRole === 'host') {
-      net.sendEvent({ t: 'feed', msg, color: color || theme.muted });
-    }
-  }
-
-  function renderFeed() {
-    feedEl.innerHTML = '';
-    for (const item of state.feed) {
-      const row = document.createElement('div');
-      row.textContent = item.msg;
-      row.style.color = item.color;
-      feedEl.appendChild(row);
-    }
   }
 
   function pingColorStyle(ms) {
@@ -578,10 +557,8 @@ import {
   function applyPickup(bot, type) {
     if (type === 'heal') {
       bot.hp = Math.min(bot.maxHp, bot.hp + 1);
-      addFeed(`${bot.name} ♥ repaired`, bot.color);
     } else {
       bot.overdrive = 7.0;
-      addFeed(`${bot.name} ⚡ overdrive!`, bot.color);
     }
     emitSfx('pickup');
     markStateDirty();
@@ -632,10 +609,6 @@ import {
 
     if (ko) {
       state.turrets = state.turrets.filter((t) => t.ownerId !== target.id);
-      addFeed(
-        `${attacker ? attacker.name : 'BOOM'} eliminated ${target.name}${tag ? ' ' + tag : ''}`,
-        attacker ? attacker.color : theme.warning
-      );
       checkRoundEnd();
     }
     markStateDirty();
@@ -651,10 +624,8 @@ import {
       if (alive.length === 1) {
         state.roundWinner = alive[0];
         state.wins[alive[0].id] = (state.wins[alive[0].id] || 0) + 1;
-        addFeed(`★ ${alive[0].name} wins Round ${state.round}!`, alive[0].color);
       } else {
         state.roundWinner = null;
-        addFeed('Draw — Double KO!', theme.muted);
       }
       markStateDirty();
       renderRoster();
@@ -1195,8 +1166,6 @@ import {
       spawnParticlesGrid(ev.gx, ev.gy, ev.color || theme.error, 16, 6.2);
     } else if (ev.t === 'sfx') {
       playSfxKind(ev.kind);
-    } else if (ev.t === 'feed') {
-      addFeed(ev.msg, ev.color, false);
     }
   }
 
@@ -1435,7 +1404,6 @@ import {
       }
 
       const humanCountBefore = guestRoster.size; // includes this new guest
-      addFeed(`${entry.name} joined the room`, theme.primary);
 
       // If Host was warming up solo with bots (only 1 human before this guest), start fresh immediately
       if (humanCountBefore === 1) {
@@ -1489,7 +1457,6 @@ import {
           checkRoundEnd();
         }
       }
-      addFeed(`${entry.name} disconnected`, theme.muted);
       markStateDirty();
       renderRoster();
       flushHostDelta(true);
@@ -1500,7 +1467,6 @@ import {
       state.spectating = Boolean(data.spectating);
       pendingInputs = [];
       applySnapshot(data.snapshot);
-      addFeed(`Joined room ${net.getRoomCode()} as ${getCallsign()}`, theme.primary, false);
     },
 
     onSnapshot: (snap) => {
@@ -1517,7 +1483,6 @@ import {
 
     onHostDisconnected: (reason) => {
       showNetBanner(`${reason}. You can return to Solo or host a new room.`, true);
-      addFeed(reason, theme.error, false);
     },
   });
 
@@ -1536,7 +1501,6 @@ import {
     state.wins = {};
     state.stats = { shots: 0, mirrors: 0, booms: 0 };
     startRound(true);
-    addFeed('Solo mode active', theme.primary, false);
     refocus();
   }
 
@@ -1565,7 +1529,6 @@ import {
       showNetBanner(res.error || 'Could not start room', false);
       return;
     }
-    addFeed(`Room ${res.roomCode} ready — share invite link!`, theme.primary, false);
     refocus();
   }
 
@@ -1867,7 +1830,6 @@ import {
   // --- Start & Main Loop ---
   startRound(true);
   updateNetUI({ role: 'solo', roomCode: '', text: 'Solo', tone: 'neutral', rttMs: null, natType: '' });
-  addFeed('Procedural arena ready — go!', theme.primary, false);
 
   const inviteCode = getRoomFromUrl();
   if (inviteCode) {
