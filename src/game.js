@@ -75,6 +75,9 @@ import {
   const iceMsgEl = document.getElementById('ice-msg');
   const statsRateEl = document.getElementById('stats-rate');
   const pingListEl = document.getElementById('ping-list');
+  const tutorialBtn = document.getElementById('tutorial-btn');
+  const tutorialBody = document.getElementById('tutorial-body');
+  const tutorialToggleLbl = document.getElementById('tutorial-toggle-lbl');
 
   // --- Theme & Renderer ---
   let theme = readTheme();
@@ -1779,6 +1782,13 @@ import {
   iceBtn.addEventListener('click', () => {
     iceDrawer.classList.toggle('hidden');
     iceBtn.blur();
+  });
+
+  tutorialBtn.addEventListener('click', () => {
+    const collapsed = tutorialBody.classList.toggle('hidden');
+    tutorialToggleLbl.textContent = collapsed ? 'Show' : 'Hide';
+    tutorialBtn.blur();
+    refocus();
   });
 
   iceSaveBtn.addEventListener('click', () => {
