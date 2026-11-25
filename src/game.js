@@ -334,6 +334,7 @@ import {
       if (state.netRole === 'host') {
         const isHost = i === 0;
         const guest = guestBySlot.get(i);
+        if (!state.backfillBots && !isHost && !guest) return null;
         const isHuman = isHost || Boolean(guest);
         const name = isHost ? getCallsign() : guest ? guest.name : BOT_NAMES[aiCounter++ % BOT_NAMES.length];
         return {
@@ -391,7 +392,7 @@ import {
         aiTimer: 0.1 + i * 0.05,
         telegraph: 0,
       };
-    });
+    }).filter(Boolean);
 
     renderRoster();
 
@@ -526,6 +527,7 @@ import {
   }
 
   function checkRoundEnd() {
+    if (state.bots.length < 2) return;
     const alive = state.bots.filter((b) => b.hp > 0);
     if (alive.length <= 1 && !state.roundOver) {
       state.roundOver = true;
