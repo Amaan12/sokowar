@@ -39,6 +39,8 @@ import {
   const sizeSel = document.getElementById('size-sel');
   const botsSel = document.getElementById('bots-sel');
   const styleSel = document.getElementById('style-sel');
+  const densityRange = document.getElementById('density-range');
+  const densityVal = document.getElementById('density-val');
   const p2Btn = document.getElementById('p2-btn');
   const newMapBtn = document.getElementById('new-map-btn');
   const replayBtn = document.getElementById('replay-btn');
@@ -136,6 +138,7 @@ import {
     rows: 13,
     botCount: 4,
     style: 'ruins',
+    density: 1.0,
     mode2P: false,
     backfillBots: true,
     seed: Math.floor(1000 + Math.random() * 9000),
@@ -427,7 +430,8 @@ import {
       state.rows,
       combatantCount,
       state.style,
-      state.seed + (state.round - 1) * 7
+      state.seed + (state.round - 1) * 7,
+      state.density
     );
 
     state.grid = grid;
@@ -956,6 +960,7 @@ import {
       rows: state.rows,
       botCount: state.botCount,
       style: state.style,
+      density: state.density,
       seed: state.seed,
       round: state.round,
       grid: state.grid,
@@ -1094,11 +1099,17 @@ import {
     state.rows = snap.rows;
     state.botCount = snap.botCount;
     state.style = snap.style;
+    state.density = snap.density ?? 1.0;
     state.seed = snap.seed;
     state.round = snap.round;
 
     sizeSel.value = `${snap.cols}x${snap.rows}`;
     styleSel.value = snap.style;
+    if (densityRange && densityVal) {
+      const pct = Math.round(state.density * 100);
+      densityRange.value = String(pct);
+      densityVal.textContent = `${pct}%`;
+    }
     seedLabel.textContent = `Seed #${snap.seed}`;
     roundLabel.textContent = `Round ${snap.round}`;
 
@@ -1356,9 +1367,10 @@ import {
     sizeSel.disabled = disableConfig;
     botsSel.disabled = disableConfig;
     styleSel.disabled = disableConfig;
+    densityRange.disabled = disableConfig;
     newMapBtn.disabled = disableConfig;
     replayBtn.disabled = disableConfig;
-    for (const el of [sizeSel, botsSel, styleSel, newMapBtn, replayBtn]) {
+    for (const el of [sizeSel, botsSel, styleSel, densityRange, newMapBtn, replayBtn]) {
       el.classList.toggle('opacity-50', disableConfig);
       el.classList.toggle('cursor-not-allowed', disableConfig);
     }
@@ -1729,6 +1741,18 @@ import {
     state.wins = {};
     startRound(true);
     styleSel.blur();
+    refocus();
+  });
+
+  densityRange.addEventListener('input', () => {
+    densityVal.textContent = `${densityRange.value}%`;
+  });
+
+  densityRange.addEventListener('change', () => {
+    if (state.netRole === 'guest') return;
+    state.density = Number(densityRange.value) / 100;
+    startRound(false);
+    densityRange.blur();
     refocus();
   });
 

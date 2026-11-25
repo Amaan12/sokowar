@@ -44,8 +44,9 @@ export function reflectMirror(cell, dir) {
 /**
  * Generates a deterministic procedural Sokowar arena grid and spawn list.
  */
-export function generateProceduralMap(cols, rows, count, style, seed) {
+export function generateProceduralMap(cols, rows, count, style, seed, density = 1.0) {
   const rand = mulberry32(seed);
+  const dScale = Math.max(0.15, Math.min(2.0, Number(density) || 1.0));
   const g = Array.from({ length: rows }, () => Array(cols).fill(TILE.EMPTY));
   const spawns = pickSpawns(cols, rows, count);
 
@@ -57,7 +58,7 @@ export function generateProceduralMap(cols, rows, count, style, seed) {
   };
 
   // 1. Place indestructible walls
-  const wallChance = style === 'mirrors' ? 0.08 : 0.12;
+  const wallChance = Math.min(0.24, (style === 'mirrors' ? 0.08 : 0.12) * dScale);
   if (style === 'symmetric') {
     const halfW = Math.ceil(cols / 2);
     const halfH = Math.ceil(rows / 2);
@@ -125,9 +126,16 @@ export function generateProceduralMap(cols, rows, count, style, seed) {
   }
 
   // 3. Populate pushable Crates, Mirrors, and Boom Crates
-  const crateProb = style === 'mirrors' ? 0.16 : 0.22;
-  const mirrorProb = style === 'mirrors' ? 0.14 : 0.085;
-  const boomProb = 0.035;
+  let crateProb = (style === 'mirrors' ? 0.16 : 0.22) * dScale;
+  let mirrorProb = (style === 'mirrors' ? 0.14 : 0.085) * dScale;
+  let boomProb = 0.035 * dScale;
+  const totalObjProb = crateProb + mirrorProb + boomProb;
+  if (totalObjProb > 0.72) {
+    const cap = 0.72 / totalObjProb;
+    crateProb *= cap;
+    mirrorProb *= cap;
+    boomProb *= cap;
+  }
 
   const placeObject = () => {
     const r = rand();
