@@ -96,6 +96,19 @@ export function createRenderer({ canvas, stageWrap }) {
       ctx.translate((Math.random() - 0.5) * state.shakeAmp * 2, (Math.random() - 0.5) * state.shakeAmp * 2);
     }
 
+    // Enclosed outer arena wall border matching wall tiles
+    const gw = tile * state.cols;
+    const gh = tile * state.rows;
+    roundRect(ctx, ox - 7, oy - 7, gw + 14, gh + 14, 8);
+    ctx.fillStyle = theme.bg;
+    ctx.fill();
+    fillAlpha('#000000', theme.isLight ? 0.42 : 0.24);
+    strokeAlpha(theme.border, theme.isLight ? 0.6 : 0.95, 1.6);
+    roundRect(ctx, ox - 1, oy - 1, gw + 2, gh + 2, 3);
+    ctx.fillStyle = theme.card;
+    ctx.fill();
+    strokeAlpha(theme.border, theme.isLight ? 0.5 : 0.85, 1.2);
+
     // Grid cells & blocks
     for (let y = 0; y < state.rows; y++) {
       for (let x = 0; x < state.cols; x++) {
@@ -128,18 +141,19 @@ export function createRenderer({ canvas, stageWrap }) {
           ctx.lineTo(px + 7, py + tile - 7);
           ctx.stroke();
         } else if (c === TILE.CRATE_1) {
-          const col = theme.error;
+          const col = theme.palette[2];
           ctx.save();
           ctx.setLineDash([4, 3]);
           roundRect(ctx, px + 3, py + 3, tile - 6, tile - 6, 5);
-          fillAlpha(col, 0.14);
-          strokeAlpha(col, 0.95, 1.5);
+          fillAlpha(col, 0.09);
+          strokeAlpha(col, 0.48, 1.3);
           ctx.setLineDash([]);
+          ctx.globalAlpha *= 0.62;
           ctx.strokeStyle = col;
-          ctx.lineWidth = 1.6;
+          ctx.lineWidth = 1.5;
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
-          // Jagged crack across the box (distinct from diagonal mirrors)
+          // Jagged crack across the weakened amber crate
           ctx.beginPath();
           ctx.moveTo(px + tile * 0.28, py + 5);
           ctx.lineTo(px + tile * 0.48, py + tile * 0.42);
@@ -165,14 +179,44 @@ export function createRenderer({ canvas, stageWrap }) {
           }
           ctx.stroke();
         } else if (c === TILE.BOOM) {
-          roundRect(ctx, px + 3, py + 3, tile - 6, tile - 6, 5);
-          fillAlpha(theme.warning, 0.28);
-          strokeAlpha(theme.error, 1, 1.75);
-          ctx.fillStyle = theme.error;
-          ctx.font = `800 ${Math.max(8, Math.floor(tile * 0.28))}px "Montserrat", system-ui, sans-serif`;
+          ctx.save();
+          // Outer explosive crate body
+          roundRect(ctx, px + 3, py + 3, tile - 6, tile - 6, 4);
+          fillAlpha(theme.error, 0.24);
+          strokeAlpha(theme.error, 0.95, 1.6);
+
+          // Vertical wooden crate slats
+          ctx.beginPath();
+          ctx.moveTo(px + tile * 0.35, py + 4);
+          ctx.lineTo(px + tile * 0.35, py + tile - 4);
+          ctx.moveTo(px + tile * 0.65, py + 4);
+          ctx.lineTo(px + tile * 0.65, py + tile - 4);
+          strokeAlpha(theme.error, 0.42, 1);
+
+          // Inner corner bevels
+          roundRect(ctx, px + 5.5, py + 5.5, tile - 11, tile - 11, 2);
+          strokeAlpha(theme.warning, 0.45, 1);
+
+          // Center TNT label band
+          const bandY = py + tile * 0.33;
+          const bandH = tile * 0.34;
+          ctx.beginPath();
+          ctx.rect(px + 3.5, bandY, tile - 7, bandH);
+          fillAlpha(theme.bg, 0.88);
+          ctx.beginPath();
+          ctx.moveTo(px + 3.5, bandY);
+          ctx.lineTo(px + tile - 3.5, bandY);
+          ctx.moveTo(px + 3.5, bandY + bandH);
+          ctx.lineTo(px + tile - 3.5, bandY + bandH);
+          strokeAlpha(theme.error, 0.9, 1.1);
+
+          // TNT stencil
+          ctx.fillStyle = theme.fg;
+          ctx.font = `800 ${Math.max(8, Math.floor(tile * 0.25))}px "Montserrat", system-ui, sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText('TNT', px + tile / 2, py + tile / 2 + 0.5);
+          ctx.restore();
         }
       }
     }
