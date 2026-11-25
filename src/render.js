@@ -148,7 +148,7 @@ export function createRenderer({ canvas, stageWrap }) {
           fillAlpha(theme.warning, 0.28);
           strokeAlpha(theme.error, 1, 1.75);
           ctx.fillStyle = theme.error;
-          ctx.font = `bold ${Math.max(11, Math.floor(tile * 0.48))}px ui-monospace, monospace`;
+          ctx.font = `bold ${Math.max(11, Math.floor(tile * 0.48))}px "Montserrat", system-ui, sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText('✦', px + tile / 2, py + tile / 2 + 1);
@@ -176,7 +176,7 @@ export function createRenderer({ canvas, stageWrap }) {
       ctx.save();
       ctx.globalAlpha = 0.32;
       ctx.fillStyle = theme.success;
-      ctx.font = `bold ${Math.max(11, Math.floor(tile * 0.48))}px system-ui, sans-serif`;
+      ctx.font = `bold ${Math.max(11, Math.floor(tile * 0.48))}px "Montserrat", system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('♥', cx, cy + 1);
@@ -185,7 +185,7 @@ export function createRenderer({ canvas, stageWrap }) {
       ctx.save();
       ctx.globalAlpha = 0.85;
       ctx.fillStyle = theme.fg;
-      ctx.font = `bold ${Math.max(9, Math.floor(tile * 0.31))}px ui-monospace, monospace`;
+      ctx.font = `bold ${Math.max(9, Math.floor(tile * 0.31))}px "Montserrat", system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(pp.remaining.toFixed(1), cx, cy + 0.5);
@@ -202,7 +202,7 @@ export function createRenderer({ canvas, stageWrap }) {
       fillAlpha(col, 0.22);
       strokeAlpha(col, 1, 1.5);
       ctx.fillStyle = col;
-      ctx.font = `bold ${Math.max(10, Math.floor(tile * 0.42))}px system-ui, sans-serif`;
+      ctx.font = `bold ${Math.max(10, Math.floor(tile * 0.42))}px "Montserrat", system-ui, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(pk.type === 'heal' ? '♥' : '⚡', cx, cy + 1);
