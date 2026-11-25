@@ -148,10 +148,10 @@ export function createRenderer({ canvas, stageWrap }) {
           fillAlpha(theme.warning, 0.28);
           strokeAlpha(theme.error, 1, 1.75);
           ctx.fillStyle = theme.error;
-          ctx.font = `bold ${Math.max(11, Math.floor(tile * 0.48))}px "Montserrat", system-ui, sans-serif`;
+          ctx.font = `800 ${Math.max(8, Math.floor(tile * 0.28))}px "Montserrat", system-ui, sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText('✦', px + tile / 2, py + tile / 2 + 1);
+          ctx.fillText('TNT', px + tile / 2, py + tile / 2 + 0.5);
         }
       }
     }
