@@ -302,7 +302,7 @@ export function createRenderer({ canvas, stageWrap }) {
       fillAlpha(theme.bg, 0.88);
       strokeAlpha(theme.primary, 0.7, 1.2);
       ctx.fillStyle = theme.primary;
-      ctx.font = '600 11px ui-monospace, monospace';
+      ctx.font = '600 11px "Montserrat", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('SPECTATING — JOINING NEXT ROUND', W / 2, 28);
@@ -316,7 +316,7 @@ export function createRenderer({ canvas, stageWrap }) {
       fillAlpha(theme.bg, 0.92);
       strokeAlpha(state.roundWinner ? state.roundWinner.color : theme.border, 1, 2);
       ctx.fillStyle = theme.fg;
-      ctx.font = 'bold 16px ui-monospace, monospace';
+      ctx.font = '700 16px "Montserrat", system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       const text = state.roundWinner ? `${state.roundWinner.name} WINS ROUND ${state.round}!` : 'DOUBLE KO — DRAW';
