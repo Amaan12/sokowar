@@ -356,7 +356,7 @@ import {
   }
 
   function triggerShake(amp = 5, dur = 0.14) {
-    state.shakeAmp = Math.max(state.shakeAmp, amp);
+    state.shakeAmp = Math.max(state.shakeAmp, amp * 0.4);
     state.shakeTime = Math.max(state.shakeTime, dur);
   }
 
