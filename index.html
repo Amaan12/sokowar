@@ -31,7 +31,7 @@
   </style>
 </head>
 <body class="bg-[var(--background)] text-[var(--foreground)] antialiased m-0 p-3 sm:p-4 select-none">
-  <div id="app" tabindex="0" class="max-w-[1380px] mx-auto space-y-2.5 outline-none">
+  <div id="app" tabindex="0" class="max-w-[1440px] mx-auto space-y-2.5 outline-none">
     <!-- Top Config & Action Bar -->
     <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-2.5 flex flex-wrap items-center justify-between gap-2.5">
       <div class="flex flex-wrap items-center gap-2">
@@ -191,72 +191,76 @@
       </div>
     </div>
 
-    <!-- Top Info HUD (Combatants, Combat Feed, Network & Stats) -->
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-2.5 items-stretch">
-      <div class="md:col-span-5 bg-[var(--card)] border border-[var(--border)] rounded-xl p-2.5 space-y-1.5">
-        <div class="flex items-center justify-between text-xs">
-          <span class="font-semibold">Combatants</span>
-          <span id="round-label" class="font-mono text-[var(--muted-foreground)]">Round 1</span>
-        </div>
-        <div id="roster" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5"></div>
-      </div>
-
-      <div class="md:col-span-3 bg-[var(--card)] border border-[var(--border)] rounded-xl p-2.5 space-y-1.5">
-        <div class="text-xs font-semibold">Combat Feed</div>
-        <div id="feed" class="space-y-0.5 text-[11px] text-[var(--muted-foreground)] font-mono max-h-[92px] overflow-y-auto"></div>
-      </div>
-
-      <div class="md:col-span-4 bg-[var(--card)] border border-[var(--border)] rounded-xl p-2.5 space-y-1.5 text-xs">
-        <div class="flex items-center justify-between gap-2">
-          <span class="font-semibold text-[var(--foreground)]">Network &amp; Stats</span>
-          <span id="stats-rate" class="font-mono text-[11px] text-[var(--muted-foreground)] truncate">Local</span>
-        </div>
-        <div id="stats-summary" class="grid grid-cols-3 gap-1.5 font-mono text-[11px]"></div>
-        <div id="ping-list" class="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 pt-1 border-t border-[var(--border)] font-mono text-[11px]"></div>
-      </div>
-    </div>
-
-    <!-- Compact Controls & Tiles Strip -->
-    <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl px-3 py-1.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-[11px] text-[var(--muted-foreground)]">
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-        <span><span class="font-mono text-[var(--foreground)]">Arrows</span> Move &amp; push</span>
-        <span><span class="font-mono text-[var(--foreground)]">Space</span> Laser</span>
-        <span><span class="font-mono text-[var(--foreground)]">Shift/X</span> Auto-turret</span>
-        <span id="p2-hint" class="hidden"><span class="font-mono text-[var(--foreground)]">WASD+F/G</span> P2</span>
-      </div>
-      <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-        <span><span class="font-mono text-[var(--foreground)]">/ \</span> Mirror (2 DMG)</span>
-        <span><span class="font-mono text-[var(--foreground)]">✦</span> Boom 3×3</span>
-        <span><span class="font-mono text-[var(--foreground)]">♥ ⚡</span> Heal / Overdrive</span>
-      </div>
-    </div>
-
-    <!-- Centered Large Arena Canvas -->
-    <div id="stage-wrap" class="w-full relative rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--card)]" style="height: clamp(520px, 66vh, 840px);">
-      <canvas id="stage" class="block w-full h-full cursor-pointer"></canvas>
-      <div id="focus-hint" class="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-150">
-        <div class="px-4 py-2 rounded-full border border-[var(--border)] bg-[var(--background)]/90 backdrop-blur-sm text-xs font-medium shadow-sm">
-          Click arena to focus, then move &amp; push with <span class="font-mono text-[var(--primary)]">Arrow Keys</span>
-        </div>
-      </div>
-      <!-- Disconnect / NAT Banner -->
-      <div id="net-banner" class="hidden absolute inset-0 bg-[var(--background)]/85 backdrop-blur-sm flex items-center justify-center p-4">
-        <div class="max-w-md w-full bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-3 text-center shadow-lg">
-          <div class="text-sm font-semibold text-[var(--foreground)]">Multiplayer Notice</div>
-          <div id="net-banner-msg" class="text-xs text-[var(--muted-foreground)]"></div>
-          <div class="flex items-center justify-center gap-2 pt-1">
-            <button id="net-banner-solo" class="px-3 py-1.5 rounded-md text-xs font-medium bg-[var(--primary)] text-[var(--primary-foreground)] cursor-pointer">
-              Return to Solo
-            </button>
-            <button id="net-banner-host" class="hidden px-3 py-1.5 rounded-md text-xs border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] cursor-pointer">
-              Host New Room
-            </button>
+    <!-- 3-Column Centered Arena Layout (Left Info | Centered Canvas | Right Info) -->
+    <div class="grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)_248px] gap-2.5 items-start">
+      <!-- Left Sidebar: Combatants + Controls -->
+      <div class="space-y-2.5 order-2 lg:order-1">
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-2">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-semibold">Combatants</span>
+            <span id="round-label" class="font-mono text-[var(--muted-foreground)]">Round 1</span>
           </div>
+          <div id="roster" class="space-y-1.5"></div>
+        </div>
+
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-1.5 text-xs text-[var(--muted-foreground)]">
+          <div class="font-semibold text-[var(--foreground)]">Controls &amp; Tiles</div>
+          <div><span class="font-mono text-[var(--foreground)]">Arrows</span> Move &amp; push boxes</div>
+          <div><span class="font-mono text-[var(--foreground)]">Space</span> Fire laser beam</div>
+          <div><span class="font-mono text-[var(--foreground)]">Shift / X</span> Drop auto-turret</div>
+          <div id="p2-hint" class="hidden"><span class="font-mono text-[var(--foreground)]">WASD + F/G</span> Player 2 controls</div>
+          <div class="pt-1 border-t border-[var(--border)] space-y-0.5">
+            <div><span class="font-mono text-[var(--foreground)]">/ \</span> Mirrors reflect beams (2 DMG)</div>
+            <div><span class="font-mono text-[var(--foreground)]">✦</span> Boom crate explodes 3×3</div>
+            <div><span class="font-mono text-[var(--foreground)]">♥ ⚡</span> Crate drops: Heal / Overdrive</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center Arena Canvas -->
+      <div id="stage-wrap" class="w-full relative rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--card)] order-1 lg:order-2" style="height: clamp(540px, 72vh, 840px);">
+        <canvas id="stage" class="block w-full h-full cursor-pointer"></canvas>
+        <div id="focus-hint" class="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-150">
+          <div class="px-4 py-2 rounded-full border border-[var(--border)] bg-[var(--background)]/90 backdrop-blur-sm text-xs font-medium shadow-sm">
+            Click arena to focus, then move &amp; push with <span class="font-mono text-[var(--primary)]">Arrow Keys</span>
+          </div>
+        </div>
+        <!-- Disconnect / NAT Banner -->
+        <div id="net-banner" class="hidden absolute inset-0 bg-[var(--background)]/85 backdrop-blur-sm flex items-center justify-center p-4">
+          <div class="max-w-md w-full bg-[var(--card)] border border-[var(--border)] rounded-xl p-4 space-y-3 text-center shadow-lg">
+            <div class="text-sm font-semibold text-[var(--foreground)]">Multiplayer Notice</div>
+            <div id="net-banner-msg" class="text-xs text-[var(--muted-foreground)]"></div>
+            <div class="flex items-center justify-center gap-2 pt-1">
+              <button id="net-banner-solo" class="px-3 py-1.5 rounded-md text-xs font-medium bg-[var(--primary)] text-[var(--primary-foreground)] cursor-pointer">
+                Return to Solo
+              </button>
+              <button id="net-banner-host" class="hidden px-3 py-1.5 rounded-md text-xs border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] cursor-pointer">
+                Host New Room
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Sidebar: Network & Stats + Combat Feed -->
+      <div class="space-y-2.5 order-3">
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-2 text-xs">
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-semibold text-[var(--foreground)]">Network &amp; Stats</span>
+            <span id="stats-rate" class="font-mono text-[11px] text-[var(--muted-foreground)] truncate">Local</span>
+          </div>
+          <div id="stats-summary" class="grid grid-cols-3 gap-1.5 font-mono text-[11px]"></div>
+          <div id="ping-list" class="space-y-1 pt-1 border-t border-[var(--border)] font-mono text-[11px]"></div>
+        </div>
+
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-2">
+          <div class="text-xs font-semibold">Combat Feed</div>
+          <div id="feed" class="space-y-1 text-xs text-[var(--muted-foreground)] font-mono min-h-[96px]"></div>
         </div>
       </div>
     </div>
   </div>
 
-  <script type="module" src="./src/game.js?v=2"></script>
+  <script type="module" src="./src/game.js?v=3"></script>
 </body>
 </html>
