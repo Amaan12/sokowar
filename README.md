@@ -2,7 +2,7 @@
 
 Fast 2D grid kinetic battle game combining **Sokoban box & mirror pushing**, **bouncing supercharged lasers**, **chain-reaction boom crates**, **placeable auto-turrets**, **timed health spawns**, and **AI bots** on procedural maps — hosted statically on GitHub Pages with **serverless WebRTC P2P multiplayer**.
 
-**Play Live:** `https://amaan12.github.io/sokowar/`
+**Play Live:** [https://amaan12.github.io/sokowar/](https://amaan12.github.io/sokowar/)
 
 ---
 
@@ -29,7 +29,7 @@ Fast 2D grid kinetic battle game combining **Sokoban box & mirror pushing**, **b
 | Rematch current seed | `R` *(Solo / Host)* | — |
 
 - **`/ \` Mirrors:** Reflect laser beams at 90° and supercharge them to **2 DMG**.
-- **`✦` Boom Crates:** Explode in a 3×3 radius and chain-detonate adjacent boom crates.
+- **`TNT` Boom Crates:** Explode in a 3×3 radius and chain-detonate adjacent boom crates.
 - **`♥` / `⚡` Pickups:** Repair +1 HP or grant temporary Overdrive (rapid fire + faster turrets).
 
 ---
@@ -68,3 +68,11 @@ Then open `http://localhost:8080` in your browser (or two tabs to test Host & Jo
 ## Notes on P2P & Mobile Data / Strict NAT
 
 Because Sokowar runs 100% statically on GitHub Pages with no backend servers, WebRTC uses public STUN servers (`stun.l.google.com:19302`) for NAT traversal. Standard broadband/Wi-Fi connections punch through directly in most cases; however, two peers both behind strict symmetric NAT / mobile CGNAT may be blocked without a TURN relay. If needed, click **ICE/TURN** in the multiplayer bar to paste your own `iceServers` JSON (saved only in your browser's `localStorage`).
+
+---
+
+## License
+
+**All Rights Reserved — Copyright © 2026 Amaan12.**
+
+Sokowar, including all source code, game design, visuals, and audio synthesis in this repository, is the exclusive property of **Amaan12**. Playing the game on the official hosted site is permitted, but no part of this repository may be copied, modified, redistributed, sublicensed, or used (commercially or non-commercially) without explicit written permission from **Amaan12**.
