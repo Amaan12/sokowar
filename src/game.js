@@ -1746,7 +1746,7 @@ import {
     try {
       await navigator.clipboard.writeText(url);
       copyLinkBtn.textContent = 'Copied!';
-      setTimeout(() => { copyLinkBtn.textContent = 'Copy Invite URL'; }, 1600);
+      setTimeout(() => { copyLinkBtn.textContent = 'Copy URL'; }, 1600);
     } catch {
       window.prompt('Copy invite link:', url);
     }

@@ -119,100 +119,102 @@
       </div>
     </div>
 
-    <!-- Serverless WebRTC P2P Multiplayer Bar -->
-    <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-2">
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="text-xs font-semibold text-[var(--foreground)] pr-1">Online P2P</span>
-
-          <!-- Callsign -->
-          <input
-            id="name-input"
-            type="text"
-            maxlength="10"
-            placeholder="Callsign"
-            class="w-28 px-2 py-1 rounded-md text-xs font-mono bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] outline-none focus:border-[var(--primary)]"
-          />
-
-          <!-- Lobby Controls (Solo) -->
-          <div id="lobby-controls" class="flex flex-wrap items-center gap-2">
-            <button id="host-btn" class="px-2.5 py-1 rounded-md text-xs font-medium bg-[var(--accent)] text-white hover:opacity-90 transition-opacity cursor-pointer">
-              Host Room
-            </button>
-
-            <div class="flex items-center">
-              <input
-                id="room-input"
-                type="text"
-                maxlength="12"
-                placeholder="CODE"
-                class="w-20 px-2 py-1 rounded-l-md text-xs font-mono uppercase bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] outline-none focus:border-[var(--primary)]"
-              />
-              <button id="join-btn" class="px-2.5 py-1 rounded-r-md text-xs font-medium border border-l-0 border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--primary)] transition-colors cursor-pointer">
-                Join
+    <!-- 2-Column Layout (Left Sidebar | Expanded Arena Canvas) -->
+    <div class="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-2.5 items-start">
+      <!-- Left Sidebar: Online P2P + Combatants + Network + Controls & Tiles -->
+      <div class="space-y-2.5 order-2 lg:order-1">
+        <!-- Serverless WebRTC P2P Multiplayer Card -->
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-2">
+          <div class="flex items-center justify-between gap-1.5">
+            <span class="text-xs font-semibold text-[var(--foreground)]">Online P2P</span>
+            <div class="flex items-center gap-1.5 min-w-0">
+              <span id="net-pill" class="px-2 py-0.5 rounded-md text-[11px] font-mono border border-[var(--border)] text-[var(--muted-foreground)] bg-[var(--background)] truncate">
+                Solo
+              </span>
+              <button id="ice-btn" class="px-1.5 py-0.5 rounded-md text-[11px] border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer shrink-0">
+                ICE
               </button>
             </div>
+          </div>
 
-            <label class="text-xs text-[var(--muted-foreground)] flex items-center gap-1">
-              Relay
-              <select id="relay-sel" class="px-2 py-1 rounded-md text-xs bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] cursor-pointer">
+          <!-- Callsign -->
+          <div class="flex items-center gap-1.5">
+            <input
+              id="name-input"
+              type="text"
+              maxlength="10"
+              placeholder="Callsign"
+              class="flex-1 min-w-0 px-2 py-1 rounded-md text-xs font-mono bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] outline-none focus:border-[var(--primary)]"
+            />
+            <label class="text-[11px] text-[var(--muted-foreground)] flex items-center gap-1 shrink-0">
+              <select id="relay-sel" title="Signaling Relay" class="px-1.5 py-1 rounded-md text-xs bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] cursor-pointer">
                 <option value="nostr" selected>Nostr</option>
                 <option value="mqtt">MQTT</option>
               </select>
             </label>
           </div>
 
+          <!-- Lobby Controls (Solo) -->
+          <div id="lobby-controls" class="space-y-1.5">
+            <div class="flex items-center gap-1.5">
+              <button id="host-btn" class="flex-1 px-2.5 py-1 rounded-md text-xs font-medium bg-[var(--accent)] text-white hover:opacity-90 transition-opacity cursor-pointer">
+                Host Room
+              </button>
+              <div class="flex items-center shrink-0">
+                <input
+                  id="room-input"
+                  type="text"
+                  maxlength="12"
+                  placeholder="CODE"
+                  class="w-16 px-2 py-1 rounded-l-md text-xs font-mono uppercase bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] outline-none focus:border-[var(--primary)]"
+                />
+                <button id="join-btn" class="px-2.5 py-1 rounded-r-md text-xs font-medium border border-l-0 border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--primary)] transition-colors cursor-pointer">
+                  Join
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- Active Room Controls -->
-          <div id="room-active" class="hidden flex flex-wrap items-center gap-2">
-            <span id="room-badge" class="px-2.5 py-1 rounded-md text-xs font-mono font-semibold bg-[var(--background)] border border-[var(--primary)]/50 text-[var(--primary)]">
-              ROOM · -----
-            </span>
-            <button id="copy-link-btn" class="px-2.5 py-1 rounded-md text-xs border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--primary)] transition-colors cursor-pointer">
-              Copy Invite URL
-            </button>
-            <button id="backfill-btn" class="px-2.5 py-1 rounded-md text-xs border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer">
-              AI Bots: On
-            </button>
-            <button id="leave-btn" class="px-2.5 py-1 rounded-md text-xs border border-[var(--error)]/40 bg-[var(--error)]/10 text-[var(--error)] hover:bg-[var(--error)]/20 transition-colors cursor-pointer">
-              Leave Room
-            </button>
+          <div id="room-active" class="hidden space-y-1.5">
+            <div class="flex items-center gap-1.5">
+              <span id="room-badge" class="flex-1 text-center px-2 py-1 rounded-md text-xs font-mono font-semibold bg-[var(--background)] border border-[var(--primary)]/50 text-[var(--primary)] truncate">
+                ROOM · -----
+              </span>
+              <button id="copy-link-btn" class="px-2 py-1 rounded-md text-xs border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--primary)] transition-colors cursor-pointer shrink-0">
+                Copy URL
+              </button>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button id="backfill-btn" class="flex-1 px-2 py-1 rounded-md text-xs border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer">
+                AI Bots: On
+              </button>
+              <button id="leave-btn" class="flex-1 px-2 py-1 rounded-md text-xs border border-[var(--error)]/40 bg-[var(--error)]/10 text-[var(--error)] hover:bg-[var(--error)]/20 transition-colors cursor-pointer">
+                Leave Room
+              </button>
+            </div>
+          </div>
+
+          <!-- Optional ICE / TURN Drawer -->
+          <div id="ice-drawer" class="hidden pt-2 border-t border-[var(--border)] space-y-1.5">
+            <div class="text-[11px] text-[var(--muted-foreground)]">
+              Custom <span class="font-mono text-[var(--foreground)]">iceServers</span> JSON (localStorage):
+            </div>
+            <textarea
+              id="ice-textarea"
+              rows="2"
+              placeholder='[{"urls":"turn:host:3478","username":"...","credential":"..."}]'
+              class="w-full px-2 py-1 rounded-md text-[11px] font-mono bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] outline-none focus:border-[var(--primary)]"
+            ></textarea>
+            <div class="flex items-center justify-between gap-2">
+              <span id="ice-msg" class="text-[10px] font-mono text-[var(--muted-foreground)] truncate"></span>
+              <button id="ice-save-btn" class="px-2.5 py-1 rounded-md text-xs border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--primary)] cursor-pointer shrink-0">
+                Save ICE
+              </button>
+            </div>
           </div>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
-          <span id="net-pill" class="px-2.5 py-1 rounded-md text-xs font-mono border border-[var(--border)] text-[var(--muted-foreground)] bg-[var(--background)]">
-            Solo
-          </span>
-          <button id="ice-btn" class="px-2 py-1 rounded-md text-xs border border-[var(--border)] bg-[var(--background)] text-[var(--muted-foreground)] hover:text-[var(--foreground)] transition-colors cursor-pointer">
-            ICE/TURN
-          </button>
-        </div>
-      </div>
-
-      <!-- Optional ICE / TURN Drawer -->
-      <div id="ice-drawer" class="hidden pt-2 border-t border-[var(--border)] space-y-1.5">
-        <div class="text-[11px] text-[var(--muted-foreground)]">
-          Optional custom <span class="font-mono text-[var(--foreground)]">iceServers</span> JSON (stored only in your browser's localStorage — useful if strict CGNAT/firewall blocks direct P2P):
-        </div>
-        <div class="flex flex-wrap items-start gap-2">
-          <textarea
-            id="ice-textarea"
-            rows="2"
-            placeholder='[{"urls":"turn:your-turn-host:3478","username":"...","credential":"..."}]'
-            class="flex-1 min-w-[240px] px-2 py-1 rounded-md text-xs font-mono bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] outline-none focus:border-[var(--primary)]"
-          ></textarea>
-          <button id="ice-save-btn" class="px-2.5 py-1.5 rounded-md text-xs border border-[var(--border)] bg-[var(--background)] text-[var(--foreground)] hover:border-[var(--primary)] cursor-pointer">
-            Save ICE
-          </button>
-        </div>
-        <div id="ice-msg" class="text-[11px] font-mono text-[var(--muted-foreground)]"></div>
-      </div>
-    </div>
-
-    <!-- 2-Column Layout (Left Info Sidebar | Expanded Arena Canvas) -->
-    <div class="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-2.5 items-start">
-      <!-- Left Sidebar: Combatants + Network + Controls & Tiles -->
-      <div class="space-y-2.5 order-2 lg:order-1">
         <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-2">
           <div class="flex items-center justify-between text-xs">
             <span class="font-semibold">Combatants</span>
@@ -249,7 +251,7 @@
       </div>
 
       <!-- Expanded Arena Canvas (Right Column) -->
-      <div id="stage-wrap" class="w-full relative rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--card)] order-1 lg:order-2" style="height: clamp(540px, 76vh, 880px);">
+      <div id="stage-wrap" class="w-full relative rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--card)] order-1 lg:order-2" style="height: clamp(580px, 84vh, 920px);">
         <canvas id="stage" class="block w-full h-full cursor-pointer"></canvas>
         <div id="focus-hint" class="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-150">
           <div class="px-4 py-2 rounded-full border border-[var(--border)] bg-[var(--background)]/90 backdrop-blur-sm text-xs font-medium shadow-sm">
@@ -275,6 +277,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/game.js?v=4"></script>
+  <script type="module" src="./src/game.js?v=5"></script>
 </body>
 </html>
