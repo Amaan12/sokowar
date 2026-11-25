@@ -143,6 +143,12 @@ export function createNetClient(handlers) {
   let act = null;
   let connectedPeers = new Set();
   let iceFailedPeers = new Set();
+  let peerLatencyCache = new Map(); // peerId -> { rttMs, natType }
+  let txCountWindow = 0;
+  let rxCountWindow = 0;
+  let txRate = 0;
+  let rxRate = 0;
+  let rateTimer = null;
 
   function emitStatus(status) {
     handlers.onStatus?.({
@@ -150,6 +156,8 @@ export function createNetClient(handlers) {
       strategy,
       roomCode,
       peerCount: connectedPeers.size,
+      txRate,
+      rxRate,
       ...status,
     });
   }
@@ -158,6 +166,7 @@ export function createNetClient(handlers) {
     if (joinTimer) { clearTimeout(joinTimer); joinTimer = null; }
     if (monitorTimer) { clearInterval(monitorTimer); monitorTimer = null; }
     if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
+    if (rateTimer) { clearInterval(rateTimer); rateTimer = null; }
   }
 
   async function leave() {
@@ -169,8 +178,13 @@ export function createNetClient(handlers) {
     roomCode = '';
     selfPeerId = '';
     hostPeerId = '';
+    txCountWindow = 0;
+    rxCountWindow = 0;
+    txRate = 0;
+    rxRate = 0;
     connectedPeers.clear();
     iceFailedPeers.clear();
+    peerLatencyCache.clear();
     if (prevRoom) {
       try {
         await prevRoom.leave();
@@ -227,6 +241,14 @@ export function createNetClient(handlers) {
 
       setRoomInUrl(roomCode);
 
+      rateTimer = setInterval(() => {
+        txRate = txCountWindow;
+        rxRate = rxCountWindow;
+        txCountWindow = 0;
+        rxCountWindow = 0;
+        handlers.onTrafficRate?.({ txRate, rxRate });
+      }, 1000);
+
       room.onError((err) => {
         const msg = err?.message || 'Signaling/WebRTC error';
         emitStatus({ phase: 'error', text: msg, tone: 'error', rttMs: null, natType: '' });
@@ -274,6 +296,7 @@ export function createNetClient(handlers) {
           const peerId = info?.peerId || info;
           connectedPeers.delete(peerId);
           iceFailedPeers.delete(peerId);
+          peerLatencyCache.delete(peerId);
           handlers.onGuestLeave?.(peerId);
           emitStatus({
             phase: 'hosting',
@@ -284,9 +307,42 @@ export function createNetClient(handlers) {
           });
         });
 
+        const sampleHostPeers = async () => {
+          if (!room || role !== 'host') return;
+          const peersMap = room.getPeers?.() || {};
+          const ids = Object.keys(peersMap);
+          await Promise.allSettled(
+            ids.map(async (pid) => {
+              const prev = peerLatencyCache.get(pid) || { rttMs: null, natType: 'P2P' };
+              let rttMs = prev.rttMs;
+              try {
+                rttMs = await room.ping(pid);
+              } catch {
+                // keep previous sample on timeout
+              }
+              const natType = await inspectPeerNat(peersMap[pid]);
+              peerLatencyCache.set(pid, { rttMs, natType });
+            })
+          );
+          const statsObj = {};
+          for (const pid of ids) {
+            statsObj[pid] = peerLatencyCache.get(pid) || { rttMs: null, natType: 'P2P' };
+          }
+          handlers.onPeerStats?.(statsObj);
+          const firstNat = ids.length > 0 ? statsObj[ids[0]]?.natType || 'Host' : 'Host';
+          emitStatus({
+            phase: 'hosting',
+            text: `Hosting ${roomCode} (${ids.length} peer${ids.length === 1 ? '' : 's'})`,
+            tone: 'success',
+            rttMs: 0,
+            natType: firstNat,
+          });
+        };
+
         act.hello.onMessage((data, meta) => {
           const peerId = meta?.peerId;
           if (!peerId) return;
+          rxCountWindow++;
           connectedPeers.add(peerId);
           const result = handlers.onGuestHello?.(peerId, data);
           if (!result || result.error) {
@@ -294,6 +350,7 @@ export function createNetClient(handlers) {
             return;
           }
           act.welcome.send(result.welcomePayload, { target: peerId }).catch(() => {});
+          setTimeout(sampleHostPeers, 500);
           emitStatus({
             phase: 'hosting',
             text: `Hosting ${roomCode} (${connectedPeers.size} peer${connectedPeers.size === 1 ? '' : 's'})`,
@@ -306,31 +363,18 @@ export function createNetClient(handlers) {
         act.input.onMessage((data, meta) => {
           const peerId = meta?.peerId;
           if (!peerId || !data) return;
+          rxCountWindow++;
           handlers.onGuestInput?.(peerId, data);
         });
 
         hbTimer = setInterval(() => {
           if (room && connectedPeers.size > 0) {
+            txCountWindow++;
             act.hb.send({ t: Date.now() }).catch(() => {});
           }
         }, NET_CFG.HEARTBEAT_MS);
 
-        monitorTimer = setInterval(async () => {
-          if (!room || role !== 'host') return;
-          const peersMap = room.getPeers?.() || {};
-          const ids = Object.keys(peersMap);
-          let natLabel = 'Host';
-          if (ids.length > 0) {
-            natLabel = await inspectPeerNat(peersMap[ids[0]]);
-          }
-          emitStatus({
-            phase: 'hosting',
-            text: `Hosting ${roomCode} (${ids.length} peer${ids.length === 1 ? '' : 's'})`,
-            tone: 'success',
-            rttMs: 0,
-            natType: natLabel,
-          });
-        }, 2500);
+        monitorTimer = setInterval(sampleHostPeers, 2000);
       } else {
         // Guest role
         emitStatus({
@@ -376,63 +420,7 @@ export function createNetClient(handlers) {
           emitStatus({ phase: 'rejected', text: reason, tone: 'error', rttMs: null, natType: '' });
         });
 
-        act.welcome.onMessage((data, meta) => {
-          const peerId = meta?.peerId;
-          if (!peerId || !data) return;
-          if (joinTimer) { clearTimeout(joinTimer); joinTimer = null; }
-          hostPeerId = peerId;
-          lastHostMsgAt = Date.now();
-          handlers.onWelcome?.(data, peerId);
-          emitStatus({
-            phase: 'connected',
-            text: `Connected to ${roomCode}`,
-            tone: 'success',
-            rttMs: null,
-            natType: 'P2P',
-          });
-        });
-
-        act.snap.onMessage((data, meta) => {
-          if (meta?.peerId !== hostPeerId) return;
-          lastHostMsgAt = Date.now();
-          handlers.onSnapshot?.(data);
-        });
-
-        act.delta.onMessage((data, meta) => {
-          if (meta?.peerId !== hostPeerId) return;
-          lastHostMsgAt = Date.now();
-          handlers.onDelta?.(data);
-        });
-
-        act.ev.onMessage((data, meta) => {
-          if (meta?.peerId !== hostPeerId) return;
-          lastHostMsgAt = Date.now();
-          handlers.onEvent?.(data);
-        });
-
-        act.hb.onMessage((_, meta) => {
-          if (meta?.peerId === hostPeerId) {
-            lastHostMsgAt = Date.now();
-          }
-        });
-
-        // Timeout if no host responds within ICE_TIMEOUT_MS
-        joinTimer = setTimeout(() => {
-          if (role !== 'guest' || hostPeerId) return;
-          const hadPeers = connectedPeers.size > 0;
-          const blocked = iceFailedPeers.size > 0 || !hadPeers;
-          emitStatus({
-            phase: 'blocked',
-            text: blocked
-              ? 'No P2P link (Host offline or strict CGNAT/firewall — try MQTT or TURN)'
-              : 'Host did not respond in time',
-            tone: 'error',
-            rttMs: null,
-            natType: 'Blocked',
-          });
-        }, NET_CFG.ICE_TIMEOUT_MS);
-
-        monitorTimer = setInterval(async () => {
+        const sampleGuestHost = async () => {
           if (!room || role !== 'guest' || !hostPeerId) return;
           if (Date.now() - lastHostMsgAt > NET_CFG.HOST_TIMEOUT_MS) {
             clearTimers();
@@ -461,7 +449,71 @@ export function createNetClient(handlers) {
             rttMs,
             natType,
           });
-        }, 2500);
+        };
+
+        act.welcome.onMessage((data, meta) => {
+          const peerId = meta?.peerId;
+          if (!peerId || !data) return;
+          if (joinTimer) { clearTimeout(joinTimer); joinTimer = null; }
+          rxCountWindow++;
+          hostPeerId = peerId;
+          lastHostMsgAt = Date.now();
+          handlers.onWelcome?.(data, peerId);
+          setTimeout(sampleGuestHost, 400);
+          emitStatus({
+            phase: 'connected',
+            text: `Connected to ${roomCode}`,
+            tone: 'success',
+            rttMs: null,
+            natType: 'P2P',
+          });
+        });
+
+        act.snap.onMessage((data, meta) => {
+          if (meta?.peerId !== hostPeerId) return;
+          rxCountWindow++;
+          lastHostMsgAt = Date.now();
+          handlers.onSnapshot?.(data);
+        });
+
+        act.delta.onMessage((data, meta) => {
+          if (meta?.peerId !== hostPeerId) return;
+          rxCountWindow++;
+          lastHostMsgAt = Date.now();
+          handlers.onDelta?.(data);
+        });
+
+        act.ev.onMessage((data, meta) => {
+          if (meta?.peerId !== hostPeerId) return;
+          rxCountWindow++;
+          lastHostMsgAt = Date.now();
+          handlers.onEvent?.(data);
+        });
+
+        act.hb.onMessage((_, meta) => {
+          if (meta?.peerId === hostPeerId) {
+            rxCountWindow++;
+            lastHostMsgAt = Date.now();
+          }
+        });
+
+        // Timeout if no host responds within ICE_TIMEOUT_MS
+        joinTimer = setTimeout(() => {
+          if (role !== 'guest' || hostPeerId) return;
+          const hadPeers = connectedPeers.size > 0;
+          const blocked = iceFailedPeers.size > 0 || !hadPeers;
+          emitStatus({
+            phase: 'blocked',
+            text: blocked
+              ? 'No P2P link (Host offline or strict CGNAT/firewall — try MQTT or TURN)'
+              : 'Host did not respond in time',
+            tone: 'error',
+            rttMs: null,
+            natType: 'Blocked',
+          });
+        }, NET_CFG.ICE_TIMEOUT_MS);
+
+        monitorTimer = setInterval(sampleGuestHost, 2000);
       }
 
       return { ok: true, roomCode, selfPeerId };
@@ -485,22 +537,27 @@ export function createNetClient(handlers) {
     leave,
     sendInput: (pkt) => {
       if (!act || role !== 'guest' || !hostPeerId) return;
+      txCountWindow++;
       act.input.send(pkt, { target: hostPeerId }).catch(() => {});
     },
     sendSnapshot: (payload, targetPeerId = null) => {
       if (!act || role !== 'host') return;
       if (targetPeerId) {
+        txCountWindow++;
         act.snap.send(payload, { target: targetPeerId }).catch(() => {});
       } else if (connectedPeers.size > 0) {
+        txCountWindow++;
         act.snap.send(payload).catch(() => {});
       }
     },
     sendDelta: (payload) => {
       if (!act || role !== 'host' || connectedPeers.size === 0) return;
+      txCountWindow++;
       act.delta.send(payload).catch(() => {});
     },
     sendEvent: (ev) => {
       if (!act || role !== 'host' || connectedPeers.size === 0) return;
+      txCountWindow++;
       act.ev.send(ev).catch(() => {});
     },
   };

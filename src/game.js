@@ -72,6 +72,9 @@ import {
   const iceTextarea = document.getElementById('ice-textarea');
   const iceSaveBtn = document.getElementById('ice-save-btn');
   const iceMsgEl = document.getElementById('ice-msg');
+  const statsRateEl = document.getElementById('stats-rate');
+  const statsSummaryEl = document.getElementById('stats-summary');
+  const pingListEl = document.getElementById('ping-list');
 
   // --- Theme & Renderer ---
   let theme = readTheme();
@@ -157,15 +160,18 @@ import {
     netRole: 'solo',    // 'solo' | 'host' | 'guest'
     mySlot: 0,
     spectating: false,
+    stats: { shots: 0, mirrors: 0, booms: 0 },
   };
 
   // --- Multiplayer Sync State ---
-  const guestRoster = new Map(); // peerId -> { peerId, slot, name, lastSeq, spectating }
+  const guestRoster = new Map(); // peerId -> { peerId, slot, name, lastSeq, spectating, pingMs, natType }
   const dirtyCells = new Map();  // "x,y" -> [x, y, val]
   let deltaDirty = false;
   let lastDeltaSentAt = 0;
   let lastPeriodicSyncAt = 0;
   let lastSimStepAt = performance.now();
+  let peerMetaList = []; // [[slot, name, pingMs, natType, spectating], ...]
+  let netTraffic = { txRate: 0, rxRate: 0, natType: '' };
 
   // Guest CSP State
   let authGrid = [];
@@ -206,8 +212,105 @@ import {
     }
   }
 
+  function pingColorStyle(ms) {
+    if (typeof ms !== 'number') return theme.muted;
+    if (ms < 50) return theme.success;
+    if (ms < 120) return theme.warning;
+    return theme.error;
+  }
+
+  function buildPeersMeta() {
+    const rows = [[0, getCallsign(), 0, 'Host', 0]];
+    const sorted = [...guestRoster.values()].sort((a, b) => a.slot - b.slot);
+    for (const g of sorted) {
+      rows.push([g.slot, g.name, typeof g.pingMs === 'number' ? g.pingMs : null, g.natType || 'P2P', g.spectating ? 1 : 0]);
+    }
+    return rows;
+  }
+
+  function renderStatsPanel() {
+    if (!statsSummaryEl || !pingListEl || !statsRateEl) return;
+
+    if (state.netRole === 'solo') {
+      statsRateEl.textContent = 'Local';
+    } else {
+      const natLabel = netTraffic.natType ? ` · ${netTraffic.natType}` : '';
+      statsRateEl.textContent = `Tx ${netTraffic.txRate} / Rx ${netTraffic.rxRate} pkt/s${natLabel}`;
+    }
+
+    statsSummaryEl.innerHTML = '';
+    const metrics = [
+      ['Shots', state.stats.shots],
+      ['Mirrors', state.stats.mirrors],
+      ['Booms', state.stats.booms],
+    ];
+    for (const [k, v] of metrics) {
+      const box = document.createElement('div');
+      box.className = 'px-2 py-1 rounded-md bg-[var(--background)] border border-[var(--border)] text-center';
+      const valEl = document.createElement('div');
+      valEl.className = 'font-semibold text-[var(--foreground)] tabular-nums';
+      valEl.textContent = String(v);
+      const lblEl = document.createElement('div');
+      lblEl.className = 'text-[10px] text-[var(--muted-foreground)]';
+      lblEl.textContent = k;
+      box.append(valEl, lblEl);
+      statsSummaryEl.appendChild(box);
+    }
+
+    pingListEl.innerHTML = '';
+    if (state.netRole === 'solo') {
+      const empty = document.createElement('div');
+      empty.className = 'text-[var(--muted-foreground)]';
+      empty.textContent = 'Solo mode — Host or Join a room for live player pings.';
+      pingListEl.appendChild(empty);
+      return;
+    }
+
+    const list = state.netRole === 'host' ? buildPeersMeta() : peerMetaList;
+    for (const [slot, name, pingMs, natType, spectating] of list) {
+      const row = document.createElement('div');
+      row.className = 'flex items-center justify-between gap-2';
+
+      const left = document.createElement('div');
+      left.className = 'flex items-center gap-1.5 min-w-0';
+      const dot = document.createElement('span');
+      dot.className = 'w-2 h-2 rounded-full shrink-0';
+      dot.style.backgroundColor = theme.palette[slot % theme.palette.length];
+      const lbl = document.createElement('span');
+      lbl.className = 'truncate text-[var(--foreground)]';
+      const flags = [];
+      if (slot === state.mySlot) flags.push('YOU');
+      if (slot === 0) flags.push('HOST');
+      if (spectating) flags.push('SPEC');
+      lbl.textContent = flags.length ? `${name} (${flags.join('/')})` : name;
+      left.append(dot, lbl);
+
+      const right = document.createElement('div');
+      right.className = 'flex items-center gap-1.5 shrink-0 tabular-nums';
+      if (natType && slot !== 0) {
+        const natEl = document.createElement('span');
+        natEl.className = 'text-[10px] text-[var(--muted-foreground)]';
+        natEl.textContent = natType;
+        right.appendChild(natEl);
+      }
+      const pingEl = document.createElement('span');
+      pingEl.style.color = slot === 0 ? theme.primary : pingColorStyle(pingMs);
+      pingEl.textContent = slot === 0 ? '0ms' : typeof pingMs === 'number' ? `${pingMs}ms` : '...';
+      right.appendChild(pingEl);
+
+      row.append(left, right);
+      pingListEl.appendChild(row);
+    }
+  }
+
   function renderRoster() {
     rosterEl.innerHTML = '';
+    const pingBySlot = new Map();
+    const meta = state.netRole === 'host' ? buildPeersMeta() : peerMetaList;
+    for (const [slot, , pingMs] of meta) {
+      pingBySlot.set(slot, pingMs);
+    }
+
     for (const b of state.bots) {
       const row = document.createElement('div');
       const dead = b.hp <= 0;
@@ -227,6 +330,14 @@ import {
 
       const right = document.createElement('div');
       right.className = 'flex items-center gap-2 font-mono shrink-0';
+      if (state.netRole !== 'solo' && b.isHuman) {
+        const ms = pingBySlot.get(b.slot);
+        const pingTag = document.createElement('span');
+        pingTag.className = 'text-[10px] tabular-nums';
+        pingTag.style.color = b.slot === 0 ? theme.primary : pingColorStyle(ms);
+        pingTag.textContent = b.slot === 0 ? 'HOST' : typeof ms === 'number' ? `${ms}ms` : '--';
+        right.appendChild(pingTag);
+      }
       const hearts = document.createElement('span');
       hearts.style.color = b.color;
       hearts.textContent = dead ? 'KO' : ('♥'.repeat(b.hp) + '♡'.repeat(b.maxHp - b.hp));
@@ -238,6 +349,7 @@ import {
       row.append(left, right);
       rosterEl.appendChild(row);
     }
+    renderStatsPanel();
   }
 
   function triggerShake(amp = 5, dur = 0.14) {
@@ -546,6 +658,7 @@ import {
   }
 
   function detonateBoomCrate(bx, by, attacker) {
+    state.stats.booms++;
     const queue = [[bx, by]];
     const seen = new Set([`${bx},${by}`]);
     const boomCells = [];
@@ -590,6 +703,7 @@ import {
   }
 
   function fireLaserFrom(sx, sy, dir, attacker) {
+    state.stats.shots++;
     const baseColor = attacker ? attacker.color : theme.primary;
     const pts = [[sx + 0.5, sy + 0.5]];
     let x = sx;
@@ -640,6 +754,7 @@ import {
         pts.push([x + 0.5, y + 0.5]);
         spawnParticlesGrid(x + 0.5, y + 0.5, theme.palette[4], 6, 3.8);
         emitSfx('mirror');
+        state.stats.mirrors++;
         d = reflectMirror(cell, d);
         supercharged = true;
         bounces++;
@@ -850,6 +965,8 @@ import {
       pp: serializePending(),
       ro: [state.roundOver ? 1 : 0, state.roundWinner ? state.roundWinner.slot : -1, state.wins],
       ack: buildAckMap(),
+      peers: buildPeersMeta(),
+      stats: [state.stats.shots, state.stats.mirrors, state.stats.booms],
     };
   }
 
@@ -876,7 +993,10 @@ import {
       pk: serializePickups(),
       pp: serializePending(),
       ro: [state.roundOver ? 1 : 0, state.roundWinner ? state.roundWinner.slot : -1, state.round, state.wins],
+      peers: buildPeersMeta(),
+      stats: [state.stats.shots, state.stats.mirrors, state.stats.booms],
     });
+    renderStatsPanel();
   }
 
   // --- Guest State Application + CSP Reconciliation ---
@@ -999,6 +1119,11 @@ import {
     state.roundWinner = winnerSlot >= 0 ? state.bots.find((b) => b.slot === winnerSlot) || null : null;
     state.wins = winsMap || {};
 
+    if (snap.peers) peerMetaList = snap.peers;
+    if (snap.stats) {
+      state.stats = { shots: snap.stats[0] || 0, mirrors: snap.stats[1] || 0, booms: snap.stats[2] || 0 };
+    }
+
     if (!snap.isRoundStart) {
       reconcileLocalPrediction(snap.ack?.[state.mySlot]);
     }
@@ -1007,6 +1132,10 @@ import {
 
   function applyDelta(delta) {
     if (!authGrid.length) return;
+    if (delta.peers) peerMetaList = delta.peers;
+    if (delta.stats) {
+      state.stats = { shots: delta.stats[0] || 0, mirrors: delta.stats[1] || 0, booms: delta.stats[2] || 0 };
+    }
     if (delta.g && delta.g.length) {
       for (const [x, y, val] of delta.g) {
         if (authGrid[y] && authGrid[y][x] !== undefined) {
@@ -1247,12 +1376,38 @@ import {
 
   const net = createNetClient({
     onStatus: (status) => {
+      if (status.natType) netTraffic.natType = status.natType;
+      if (typeof status.txRate === 'number') netTraffic.txRate = status.txRate;
+      if (typeof status.rxRate === 'number') netTraffic.rxRate = status.rxRate;
+      if (state.netRole === 'guest' && typeof status.rttMs === 'number') {
+        const me = peerMetaList.find((p) => p[0] === state.mySlot);
+        if (me) me[2] = status.rttMs;
+      }
       updateNetUI(status);
+      renderStatsPanel();
       if (status.phase === 'blocked') {
         showNetBanner(status.text, false);
       } else if (status.phase === 'connected' || status.phase === 'hosting') {
         hideNetBanner();
       }
+    },
+
+    onTrafficRate: ({ txRate, rxRate }) => {
+      netTraffic.txRate = txRate;
+      netTraffic.rxRate = rxRate;
+      renderStatsPanel();
+    },
+
+    onPeerStats: (peerStats) => {
+      for (const [peerId, info] of Object.entries(peerStats || {})) {
+        const entry = guestRoster.get(peerId);
+        if (entry) {
+          entry.pingMs = info.rttMs;
+          entry.natType = info.natType;
+        }
+      }
+      markStateDirty();
+      renderRoster();
     },
 
     onGuestHello: (peerId, data) => {
@@ -1263,7 +1418,7 @@ import {
           return { error: `Room full (max ${NET_CFG.MAX_PLAYERS} players)` };
         }
         const safeName = String(data?.name || `P${slot + 1}`).trim().toUpperCase().slice(0, 10) || `P${slot + 1}`;
-        entry = { peerId, slot, name: safeName, lastSeq: 0, spectating: true };
+        entry = { peerId, slot, name: safeName, lastSeq: 0, spectating: true, pingMs: null, natType: 'P2P' };
         guestRoster.set(peerId, entry);
       }
 
@@ -1357,6 +1512,8 @@ import {
   async function returnToSolo() {
     hideNetBanner();
     guestRoster.clear();
+    peerMetaList = [];
+    netTraffic = { txRate: 0, rxRate: 0, natType: '' };
     pendingInputs = [];
     authGrid = [];
     authLocalPos = null;
@@ -1365,6 +1522,7 @@ import {
     state.mySlot = 0;
     state.spectating = false;
     state.wins = {};
+    state.stats = { shots: 0, mirrors: 0, booms: 0 };
     startRound(true);
     addFeed('Solo mode active', theme.primary, false);
     refocus();
@@ -1373,6 +1531,8 @@ import {
   async function startHosting() {
     hideNetBanner();
     guestRoster.clear();
+    peerMetaList = [];
+    netTraffic = { txRate: 0, rxRate: 0, natType: 'Host' };
     pendingInputs = [];
     state.netRole = 'host';
     state.mySlot = 0;
@@ -1381,6 +1541,7 @@ import {
     p2Btn.textContent = '1P + Bots';
     p2HintEl.classList.add('hidden');
     state.wins = {};
+    state.stats = { shots: 0, mirrors: 0, booms: 0 };
     startRound(true);
 
     const res = await net.hostRoom({
@@ -1404,6 +1565,8 @@ import {
     }
     hideNetBanner();
     guestRoster.clear();
+    peerMetaList = [];
+    netTraffic = { txRate: 0, rxRate: 0, natType: '' };
     pendingInputs = [];
     authGrid = [];
     authLocalPos = null;
@@ -1411,6 +1574,8 @@ import {
     state.mySlot = -1;
     state.spectating = true;
     state.mode2P = false;
+    state.stats = { shots: 0, mirrors: 0, booms: 0 };
+    renderStatsPanel();
     p2HintEl.classList.add('hidden');
 
     const res = await net.joinRoom({
