@@ -707,7 +707,7 @@ import {
         break;
       } else if (cell === TILE.MIRROR_FWD || cell === TILE.MIRROR_BWD) {
         pts.push([x + 0.5, y + 0.5]);
-        spawnParticlesGrid(x + 0.5, y + 0.5, theme.palette[4], 6, 3.8);
+        spawnParticlesGrid(x + 0.5, y + 0.5, theme.mirror, 6, 3.8);
         emitSfx('mirror');
         d = reflectMirror(cell, d);
         supercharged = true;
@@ -716,7 +716,7 @@ import {
       }
     }
 
-    const beamColor = supercharged ? theme.palette[4] : baseColor;
+    const beamColor = supercharged ? theme.mirror : baseColor;
     state.beams.push({
       pts,
       color: beamColor,
@@ -1120,7 +1120,7 @@ import {
       const baseColor = theme.palette[ev.colorIdx % theme.palette.length] || theme.primary;
       state.beams.push({
         pts: ev.pts,
-        color: ev.supercharged ? theme.palette[4] : baseColor,
+        color: ev.supercharged ? theme.mirror : baseColor,
         life: 0.23,
         maxLife: 0.23,
         width: ev.supercharged ? 4.5 : 3,

@@ -15,6 +15,7 @@ export function readTheme() {
     fg: get('--foreground', isLight ? '#0f172a' : '#f8fafc'),
     muted: get('--muted-foreground', isLight ? '#64748b' : '#94a3b8'),
     primary: get('--primary', '#38bdf8'),
+    mirror: '#7dd3fc',
     accent: get('--accent', '#a855f7'),
     success: get('--success', '#22c55e'),
     warning: get('--warning', '#f59e0b'),
@@ -113,8 +114,8 @@ export function createRenderer({ canvas, stageWrap }) {
           strokeAlpha(theme.border, theme.isLight ? 0.55 : 0.9, 1.4);
           roundRect(ctx, px + 5, py + 5, tile - 10, tile - 10, 2.5);
           strokeAlpha(theme.fg, theme.isLight ? 0.14 : 0.10, 1);
-        } else if (c === TILE.CRATE_2 || c === TILE.CRATE_1) {
-          const col = c === TILE.CRATE_2 ? theme.palette[2] : theme.error;
+        } else if (c === TILE.CRATE_2) {
+          const col = theme.palette[2];
           roundRect(ctx, px + 3, py + 3, tile - 6, tile - 6, 5);
           fillAlpha(col, 0.24);
           strokeAlpha(col, 1, 1.5);
@@ -123,16 +124,36 @@ export function createRenderer({ canvas, stageWrap }) {
           ctx.beginPath();
           ctx.moveTo(px + 7, py + 7);
           ctx.lineTo(px + tile - 7, py + tile - 7);
-          if (c === TILE.CRATE_2) {
-            ctx.moveTo(px + tile - 7, py + 7);
-            ctx.lineTo(px + 7, py + tile - 7);
-          }
+          ctx.moveTo(px + tile - 7, py + 7);
+          ctx.lineTo(px + 7, py + tile - 7);
           ctx.stroke();
+        } else if (c === TILE.CRATE_1) {
+          const col = theme.error;
+          ctx.save();
+          ctx.setLineDash([4, 3]);
+          roundRect(ctx, px + 3, py + 3, tile - 6, tile - 6, 5);
+          fillAlpha(col, 0.14);
+          strokeAlpha(col, 0.95, 1.5);
+          ctx.setLineDash([]);
+          ctx.strokeStyle = col;
+          ctx.lineWidth = 1.6;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          // Jagged crack across the box (distinct from diagonal mirrors)
+          ctx.beginPath();
+          ctx.moveTo(px + tile * 0.28, py + 5);
+          ctx.lineTo(px + tile * 0.48, py + tile * 0.42);
+          ctx.lineTo(px + tile * 0.36, py + tile * 0.62);
+          ctx.lineTo(px + tile * 0.68, py + tile - 5);
+          ctx.moveTo(px + tile * 0.48, py + tile * 0.42);
+          ctx.lineTo(px + tile - 6, py + tile * 0.32);
+          ctx.stroke();
+          ctx.restore();
         } else if (c === TILE.MIRROR_FWD || c === TILE.MIRROR_BWD) {
           roundRect(ctx, px + 3, py + 3, tile - 6, tile - 6, 5);
-          fillAlpha(theme.palette[4], 0.18);
-          strokeAlpha(theme.palette[4], 1, 1.5);
-          ctx.strokeStyle = theme.palette[4];
+          fillAlpha(theme.mirror, 0.18);
+          strokeAlpha(theme.mirror, 1, 1.5);
+          ctx.strokeStyle = theme.mirror;
           ctx.lineWidth = 2.6;
           ctx.beginPath();
           if (c === TILE.MIRROR_FWD) {
