@@ -209,9 +209,9 @@
       </div>
     </div>
 
-    <!-- 3-Column Centered Arena Layout (Left Info | Centered Canvas | Right Info) -->
-    <div class="grid grid-cols-1 lg:grid-cols-[248px_minmax(0,1fr)_248px] gap-2.5 items-start">
-      <!-- Left Sidebar: Combatants + Controls -->
+    <!-- 2-Column Layout (Left Info Sidebar | Expanded Arena Canvas) -->
+    <div class="grid grid-cols-1 lg:grid-cols-[260px_minmax(0,1fr)] gap-2.5 items-start">
+      <!-- Left Sidebar: Combatants + Network + Controls & Tiles -->
       <div class="space-y-2.5 order-2 lg:order-1">
         <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-2">
           <div class="flex items-center justify-between text-xs">
@@ -219,6 +219,14 @@
             <span id="round-label" class="font-mono text-[var(--muted-foreground)]">Round 1</span>
           </div>
           <div id="roster" class="space-y-1.5"></div>
+        </div>
+
+        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-2 text-xs">
+          <div class="flex items-center justify-between gap-2">
+            <span class="font-semibold text-[var(--foreground)]">Network</span>
+            <span id="stats-rate" class="font-mono text-[11px] text-[var(--muted-foreground)] truncate">Local</span>
+          </div>
+          <div id="ping-list" class="space-y-1 pt-1.5 border-t border-[var(--border)] font-mono text-[11px]"></div>
         </div>
 
         <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 text-xs text-[var(--muted-foreground)]">
@@ -240,8 +248,8 @@
         </div>
       </div>
 
-      <!-- Center Arena Canvas -->
-      <div id="stage-wrap" class="w-full relative rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--card)] order-1 lg:order-2" style="height: clamp(540px, 72vh, 840px);">
+      <!-- Expanded Arena Canvas (Right Column) -->
+      <div id="stage-wrap" class="w-full relative rounded-xl overflow-hidden border border-[var(--border)] bg-[var(--card)] order-1 lg:order-2" style="height: clamp(540px, 76vh, 880px);">
         <canvas id="stage" class="block w-full h-full cursor-pointer"></canvas>
         <div id="focus-hint" class="pointer-events-none absolute inset-0 flex items-center justify-center transition-opacity duration-150">
           <div class="px-4 py-2 rounded-full border border-[var(--border)] bg-[var(--background)]/90 backdrop-blur-sm text-xs font-medium shadow-sm">
@@ -264,20 +272,9 @@
           </div>
         </div>
       </div>
-
-      <!-- Right Sidebar: Network -->
-      <div class="space-y-2.5 order-3">
-        <div class="bg-[var(--card)] border border-[var(--border)] rounded-xl p-3 space-y-2 text-xs">
-          <div class="flex items-center justify-between gap-2">
-            <span class="font-semibold text-[var(--foreground)]">Network</span>
-            <span id="stats-rate" class="font-mono text-[11px] text-[var(--muted-foreground)] truncate">Local</span>
-          </div>
-          <div id="ping-list" class="space-y-1 pt-1.5 border-t border-[var(--border)] font-mono text-[11px]"></div>
-        </div>
-      </div>
     </div>
   </div>
 
-  <script type="module" src="./src/game.js?v=3"></script>
+  <script type="module" src="./src/game.js?v=4"></script>
 </body>
 </html>
