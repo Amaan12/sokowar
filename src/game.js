@@ -1335,7 +1335,7 @@ import {
         ? 'border-[var(--error)]/50 text-[var(--error)] bg-[var(--error)]/10'
         : 'border-[var(--border)] text-[var(--muted-foreground)] bg-[var(--background)]';
 
-    const rttPart = typeof rttMs === 'number' && rttMs > 0 ? ` · ${rttMs}ms` : '';
+    const rttPart = role === 'guest' && typeof rttMs === 'number' && rttMs >= 0 ? ` · ${rttMs}ms` : '';
     const natPart = natType ? ` · ${natType}` : '';
     netPillEl.className = `px-2.5 py-1 rounded-md text-xs font-mono border ${toneClass}`;
     netPillEl.textContent = `${text}${rttPart}${natPart}`;
