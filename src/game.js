@@ -112,14 +112,16 @@ import {
 
   iceTextarea.value = getSavedIceJson();
 
-  // --- Focus & 6 KPS Human Rate Cap + Action Queue ---
-  const HUMAN_MAX_KPS = 6;
+  // --- Focus & 10 KPS Movement Cap + Action Queue + Held-Key Tracking ---
+  const HUMAN_MAX_KPS = 10;
   const HUMAN_REPEAT_MS = Math.ceil(1000 / HUMAN_MAX_KPS);
   const MAX_INPUT_QUEUE = 3;
   const p1ActionTimes = [];
   const p2ActionTimes = [];
   const p1Queue = [];
   const p2Queue = [];
+  const p1HeldDirs = [];
+  const p2HeldDirs = [];
 
   function consumeHumanAction(bucket, now, limit = HUMAN_MAX_KPS, windowMs = 1000) {
     while (bucket.length && now - bucket[0] >= windowMs) bucket.shift();
@@ -133,11 +135,19 @@ import {
     p2Queue.length = 0;
   }
 
+  function clearHeldDirs() {
+    p1HeldDirs.length = 0;
+    p2HeldDirs.length = 0;
+  }
+
   function setFocusUI(focused) {
     focusHint.style.opacity = focused ? '0' : '1';
   }
   window.addEventListener('focus', () => setFocusUI(true));
-  window.addEventListener('blur', () => setFocusUI(false));
+  window.addEventListener('blur', () => {
+    setFocusUI(false);
+    clearHeldDirs();
+  });
   stageWrap.addEventListener('pointerdown', () => {
     app.focus({ preventScroll: true });
     setFocusUI(true);
@@ -1661,16 +1671,40 @@ import {
       clearInputQueues();
       return;
     }
-    for (const [slotKind, bucket, queue] of [
-      ['p1', p1ActionTimes, p1Queue],
-      ['p2', p2ActionTimes, p2Queue],
+    for (const [slotKind, bucket, queue, held] of [
+      ['p1', p1ActionTimes, p1Queue, p1HeldDirs],
+      ['p2', p2ActionTimes, p2Queue, p2HeldDirs],
     ]) {
       while (queue.length > 0 && consumeHumanAction(bucket, now)) {
         const act = queue.shift();
         executeHumanAction(slotKind, act, now);
       }
+      if (queue.length === 0 && held.length > 0) {
+        const lastMove = slotKind === 'p1' ? state.lastP1Move : state.lastP2Move;
+        if (now - lastMove >= HUMAN_REPEAT_MS && consumeHumanAction(bucket, now)) {
+          executeHumanAction(slotKind, { a: 'm', dir: held[held.length - 1] }, now);
+        }
+      }
     }
   }
+
+  function pushHeldDir(list, dir) {
+    const idx = list.indexOf(dir);
+    if (idx !== -1) list.splice(idx, 1);
+    list.push(dir);
+  }
+
+  function removeHeldDir(list, dir) {
+    const idx = list.indexOf(dir);
+    if (idx !== -1) list.splice(idx, 1);
+  }
+
+  window.addEventListener('keyup', (e) => {
+    const dir = KEY_TO_DIR[e.key];
+    if (dir) removeHeldDir(p1HeldDirs, dir);
+    const d2 = WASD_TO_DIR[e.code];
+    if (d2) removeHeldDir(p2HeldDirs, d2);
+  });
 
   window.addEventListener('keydown', (e) => {
     const tag = e.target?.tagName;
@@ -1693,32 +1727,28 @@ import {
     }
 
     const dir = KEY_TO_DIR[e.key];
-    if (dir) {
-      queueOrRunHumanAction('p1', { a: 'm', dir }, e.repeat, now);
-      return;
+    if (dir && !e.repeat) {
+      pushHeldDir(p1HeldDirs, dir);
+      queueOrRunHumanAction('p1', { a: 'm', dir }, false, now);
     }
     if ((e.code === 'Space' || e.key === ' ') && !e.repeat) {
       executeHumanAction('p1', { a: 'f' }, now);
-      return;
     }
     if ((e.key === 'Shift' || e.code === 'KeyX' || e.code === 'Enter') && !e.repeat) {
       executeHumanAction('p1', { a: 't' }, now);
-      return;
     }
 
     if (state.netRole === 'solo' && state.mode2P) {
       const d2 = WASD_TO_DIR[e.code];
-      if (d2) {
-        queueOrRunHumanAction('p2', { a: 'm', dir: d2 }, e.repeat, now);
-        return;
+      if (d2 && !e.repeat) {
+        pushHeldDir(p2HeldDirs, d2);
+        queueOrRunHumanAction('p2', { a: 'm', dir: d2 }, false, now);
       }
       if (e.code === 'KeyF' && !e.repeat) {
         executeHumanAction('p2', { a: 'f' }, now);
-        return;
       }
       if (e.code === 'KeyG' && !e.repeat) {
         executeHumanAction('p2', { a: 't' }, now);
-        return;
       }
     }
   });
