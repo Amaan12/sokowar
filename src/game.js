@@ -80,6 +80,9 @@ import {
   const tutorialBtn = document.getElementById('tutorial-btn');
   const tutorialBody = document.getElementById('tutorial-body');
   const tutorialToggleLbl = document.getElementById('tutorial-toggle-lbl');
+  const fsBtn = document.getElementById('fs-btn');
+  const fsIconEnter = document.getElementById('fs-icon-enter');
+  const fsIconExit = document.getElementById('fs-icon-exit');
 
   // --- Theme & Renderer ---
   let theme = readTheme();
@@ -1635,6 +1638,10 @@ import {
       startRound(false);
       return;
     }
+    if (e.code === 'KeyF' && !e.repeat && !(state.netRole === 'solo' && state.mode2P)) {
+      toggleFullscreen();
+      return;
+    }
 
     const dir = KEY_TO_DIR[e.key];
     if (dir && !e.repeat) {
@@ -1667,6 +1674,41 @@ import {
     app.focus({ preventScroll: true });
     setFocusUI(true);
   }
+
+  function isStageFullscreen() {
+    return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+  }
+
+  function syncFullscreenUI() {
+    const active = isStageFullscreen();
+    if (fsIconEnter && fsIconExit) {
+      fsIconEnter.classList.toggle('hidden', active);
+      fsIconExit.classList.toggle('hidden', !active);
+    }
+    if (fsBtn) {
+      fsBtn.title = active ? 'Exit Fullscreen [F]' : 'Fullscreen [F]';
+    }
+    renderer.resize();
+  }
+
+  function toggleFullscreen() {
+    if (isStageFullscreen()) {
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if (exit) Promise.resolve(exit.call(document)).catch(() => {});
+    } else {
+      const req = stageWrap.requestFullscreen || stageWrap.webkitRequestFullscreen;
+      if (req) Promise.resolve(req.call(stageWrap)).catch(() => {});
+    }
+  }
+
+  document.addEventListener('fullscreenchange', syncFullscreenUI);
+  document.addEventListener('webkitfullscreenchange', syncFullscreenUI);
+  fsBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFullscreen();
+    fsBtn.blur();
+    refocus();
+  });
 
   sizeSel.addEventListener('change', () => {
     if (state.netRole === 'guest') return;
