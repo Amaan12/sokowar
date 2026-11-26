@@ -1459,11 +1459,11 @@ import {
         markStateDirty();
         return;
       }
-      if (!consumeHumanAction(entry.actionTimes, performance.now(), HUMAN_MAX_KPS, 940)) {
-        markStateDirty();
-        return;
-      }
       if (pkt.a === 'm') {
+        if (!consumeHumanAction(entry.actionTimes, performance.now(), HUMAN_MAX_KPS, 940)) {
+          markStateDirty();
+          return;
+        }
         const dir = DIRS[pkt.d];
         if (dir) moveBot(bot, dir);
       } else if (pkt.a === 'f') {
@@ -1698,11 +1698,11 @@ import {
       return;
     }
     if ((e.code === 'Space' || e.key === ' ') && !e.repeat) {
-      queueOrRunHumanAction('p1', { a: 'f' }, false, now);
+      executeHumanAction('p1', { a: 'f' }, now);
       return;
     }
     if ((e.key === 'Shift' || e.code === 'KeyX' || e.code === 'Enter') && !e.repeat) {
-      queueOrRunHumanAction('p1', { a: 't' }, false, now);
+      executeHumanAction('p1', { a: 't' }, now);
       return;
     }
 
@@ -1713,11 +1713,11 @@ import {
         return;
       }
       if (e.code === 'KeyF' && !e.repeat) {
-        queueOrRunHumanAction('p2', { a: 'f' }, false, now);
+        executeHumanAction('p2', { a: 'f' }, now);
         return;
       }
       if (e.code === 'KeyG' && !e.repeat) {
-        queueOrRunHumanAction('p2', { a: 't' }, false, now);
+        executeHumanAction('p2', { a: 't' }, now);
         return;
       }
     }
