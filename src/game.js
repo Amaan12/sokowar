@@ -113,10 +113,7 @@ import {
 
   iceTextarea.value = getSavedIceJson();
 
-  // --- Focus, Held-Key Tracking & Movement-Only KPS ---
-  const HOLD_REPEAT_MS = 90;
-  const p1HeldDirs = [];
-  const p2HeldDirs = [];
+  // --- Focus & Movement-Only KPS (Tap-to-Move) ---
   const moveKeyTimestamps = [];
 
   function recordMoveKey() {
@@ -128,19 +125,11 @@ import {
     if (kpsEl) kpsEl.textContent = (moveKeyTimestamps.length / 1.5).toFixed(1);
   }
 
-  function clearHeldDirs() {
-    p1HeldDirs.length = 0;
-    p2HeldDirs.length = 0;
-  }
-
   function setFocusUI(focused) {
     focusHint.style.opacity = focused ? '0' : '1';
   }
   window.addEventListener('focus', () => setFocusUI(true));
-  window.addEventListener('blur', () => {
-    setFocusUI(false);
-    clearHeldDirs();
-  });
+  window.addEventListener('blur', () => setFocusUI(false));
   stageWrap.addEventListener('pointerdown', () => {
     app.focus({ preventScroll: true });
     setFocusUI(true);
@@ -1282,7 +1271,6 @@ import {
   function update(dt) {
     lastSimStepAt = performance.now();
     updateVisuals(dt);
-    stepHeldMovement(lastSimStepAt);
 
     if (state.netRole !== 'guest') {
       updateAuthoritative(dt);
@@ -1603,14 +1591,13 @@ import {
     return p1 && p1.isHuman ? p1 : null;
   }
 
-  function executeHumanAction(slotKind, act, now) {
+  function executeHumanAction(slotKind, act) {
     const bot = getControlledBot(slotKind);
     if (!bot || bot.hp <= 0 || state.roundOver || state.countdown > 0) return;
 
     if (slotKind === 'p1' && state.netRole === 'guest') {
       const seq = ++inputSeq;
       if (act.a === 'm') {
-        state.lastP1Move = now;
         net.sendInput({ s: seq, a: 'm', d: DIR_TO_IDX[act.dir] });
         if (pendingInputs.length < 30) pendingInputs.push({ seq, dir: act.dir });
         tryMoveStep(state.grid, state.bots, bot, act.dir, { isPrediction: true });
@@ -1621,8 +1608,6 @@ import {
     }
 
     if (act.a === 'm') {
-      if (slotKind === 'p1') state.lastP1Move = now;
-      else state.lastP2Move = now;
       moveBot(bot, act.dir);
     } else if (act.a === 'f') {
       botFire(bot);
@@ -1631,38 +1616,6 @@ import {
     }
     if (state.netRole === 'host') flushHostDelta(true);
   }
-
-  function stepHeldMovement(now) {
-    if (state.roundOver || state.countdown > 0) return;
-    for (const [slotKind, held] of [
-      ['p1', p1HeldDirs],
-      ['p2', p2HeldDirs],
-    ]) {
-      if (held.length === 0) continue;
-      const lastMove = slotKind === 'p1' ? state.lastP1Move : state.lastP2Move;
-      if (now - lastMove >= HOLD_REPEAT_MS) {
-        executeHumanAction(slotKind, { a: 'm', dir: held[held.length - 1] }, now);
-      }
-    }
-  }
-
-  function pushHeldDir(list, dir) {
-    const idx = list.indexOf(dir);
-    if (idx !== -1) list.splice(idx, 1);
-    list.push(dir);
-  }
-
-  function removeHeldDir(list, dir) {
-    const idx = list.indexOf(dir);
-    if (idx !== -1) list.splice(idx, 1);
-  }
-
-  window.addEventListener('keyup', (e) => {
-    const dir = KEY_TO_DIR[e.key];
-    if (dir) removeHeldDir(p1HeldDirs, dir);
-    const d2 = WASD_TO_DIR[e.code];
-    if (d2) removeHeldDir(p2HeldDirs, d2);
-  });
 
   window.addEventListener('keydown', (e) => {
     const tag = e.target?.tagName;
@@ -1673,7 +1626,6 @@ import {
     }
     ensureAudio();
     setFocusUI(true);
-    const now = performance.now();
 
     if (e.code === 'KeyN' && !e.repeat && state.netRole !== 'guest') {
       startRound(true);
@@ -1687,28 +1639,26 @@ import {
     const dir = KEY_TO_DIR[e.key];
     if (dir && !e.repeat) {
       recordMoveKey();
-      pushHeldDir(p1HeldDirs, dir);
-      executeHumanAction('p1', { a: 'm', dir }, now);
+      executeHumanAction('p1', { a: 'm', dir });
     }
     if ((e.code === 'Space' || e.key === ' ') && !e.repeat) {
-      executeHumanAction('p1', { a: 'f' }, now);
+      executeHumanAction('p1', { a: 'f' });
     }
     if ((e.key === 'Shift' || e.code === 'KeyX' || e.code === 'Enter') && !e.repeat) {
-      executeHumanAction('p1', { a: 't' }, now);
+      executeHumanAction('p1', { a: 't' });
     }
 
     if (state.netRole === 'solo' && state.mode2P) {
       const d2 = WASD_TO_DIR[e.code];
       if (d2 && !e.repeat) {
         recordMoveKey();
-        pushHeldDir(p2HeldDirs, d2);
-        executeHumanAction('p2', { a: 'm', dir: d2 }, now);
+        executeHumanAction('p2', { a: 'm', dir: d2 });
       }
       if (e.code === 'KeyF' && !e.repeat) {
-        executeHumanAction('p2', { a: 'f' }, now);
+        executeHumanAction('p2', { a: 'f' });
       }
       if (e.code === 'KeyG' && !e.repeat) {
-        executeHumanAction('p2', { a: 't' }, now);
+        executeHumanAction('p2', { a: 't' });
       }
     }
   });
