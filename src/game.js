@@ -49,6 +49,7 @@ import {
   const soundBtn = document.getElementById('sound-btn');
   const seedLabel = document.getElementById('seed-label');
   const roundLabel = document.getElementById('round-label');
+  const kpsEl = document.getElementById('kps-val');
   const rosterEl = document.getElementById('roster');
   const p2HintEl = document.getElementById('p2-hint');
 
@@ -112,27 +113,19 @@ import {
 
   iceTextarea.value = getSavedIceJson();
 
-  // --- Focus & 10 KPS Movement Cap + Action Queue + Held-Key Tracking ---
-  const HUMAN_MAX_KPS = 10;
-  const HUMAN_REPEAT_MS = Math.ceil(1000 / HUMAN_MAX_KPS);
-  const MAX_INPUT_QUEUE = 3;
-  const p1ActionTimes = [];
-  const p2ActionTimes = [];
-  const p1Queue = [];
-  const p2Queue = [];
+  // --- Focus, Held-Key Tracking & Movement-Only KPS ---
+  const HOLD_REPEAT_MS = 90;
   const p1HeldDirs = [];
   const p2HeldDirs = [];
+  const moveKeyTimestamps = [];
 
-  function consumeHumanAction(bucket, now, limit = HUMAN_MAX_KPS, windowMs = 1000) {
-    while (bucket.length && now - bucket[0] >= windowMs) bucket.shift();
-    if (bucket.length >= limit) return false;
-    bucket.push(now);
-    return true;
+  function recordMoveKey() {
+    moveKeyTimestamps.push(performance.now());
   }
 
-  function clearInputQueues() {
-    p1Queue.length = 0;
-    p2Queue.length = 0;
+  function updateKps(now) {
+    while (moveKeyTimestamps.length && now - moveKeyTimestamps[0] > 1500) moveKeyTimestamps.shift();
+    if (kpsEl) kpsEl.textContent = (moveKeyTimestamps.length / 1.5).toFixed(1);
   }
 
   function clearHeldDirs() {
@@ -430,7 +423,6 @@ import {
     state.roundTimer = 0;
     state.countdown = withCountdown ? 3.0 : 0;
     lastCountdownBeepSec = withCountdown ? 3 : 0;
-    clearInputQueues();
     dirtyCells.clear();
 
     let aiCounter = 0;
@@ -1097,7 +1089,6 @@ import {
       pendingInputs = [];
       state.beams = [];
       state.particles = [];
-      clearInputQueues();
       lastCountdownBeepSec = Math.ceil(snap.cd || 0);
     }
 
@@ -1291,7 +1282,7 @@ import {
   function update(dt) {
     lastSimStepAt = performance.now();
     updateVisuals(dt);
-    drainHumanQueues(lastSimStepAt);
+    stepHeldMovement(lastSimStepAt);
 
     if (state.netRole !== 'guest') {
       updateAuthoritative(dt);
@@ -1435,7 +1426,7 @@ import {
           return { error: `Room full (max ${NET_CFG.MAX_PLAYERS} players)` };
         }
         const safeName = String(data?.name || `P${slot + 1}`).trim().toUpperCase().slice(0, 10) || `P${slot + 1}`;
-        entry = { peerId, slot, name: safeName, lastSeq: 0, spectating: true, pingMs: null, natType: 'P2P', actionTimes: [] };
+        entry = { peerId, slot, name: safeName, lastSeq: 0, spectating: true, pingMs: null, natType: 'P2P' };
         guestRoster.set(peerId, entry);
       }
 
@@ -1470,10 +1461,6 @@ import {
         return;
       }
       if (pkt.a === 'm') {
-        if (!consumeHumanAction(entry.actionTimes, performance.now(), HUMAN_MAX_KPS, 940)) {
-          markStateDirty();
-          return;
-        }
         const dir = DIRS[pkt.d];
         if (dir) moveBot(bot, dir);
       } else if (pkt.a === 'f') {
@@ -1645,45 +1632,16 @@ import {
     if (state.netRole === 'host') flushHostDelta(true);
   }
 
-  function queueOrRunHumanAction(slotKind, act, isRepeat, now) {
-    const bot = getControlledBot(slotKind);
-    if (!bot || bot.hp <= 0 || state.roundOver || state.countdown > 0) return;
-    const bucket = slotKind === 'p1' ? p1ActionTimes : p2ActionTimes;
-    const queue = slotKind === 'p1' ? p1Queue : p2Queue;
-    const lastMove = slotKind === 'p1' ? state.lastP1Move : state.lastP2Move;
-
-    if (isRepeat) {
-      if (queue.length === 0 && now - lastMove >= HUMAN_REPEAT_MS && consumeHumanAction(bucket, now)) {
-        executeHumanAction(slotKind, act, now);
-      }
-      return;
-    }
-
-    if (queue.length === 0 && consumeHumanAction(bucket, now)) {
-      executeHumanAction(slotKind, act, now);
-    } else if (queue.length < MAX_INPUT_QUEUE) {
-      queue.push(act);
-    }
-  }
-
-  function drainHumanQueues(now) {
-    if (state.roundOver || state.countdown > 0) {
-      clearInputQueues();
-      return;
-    }
-    for (const [slotKind, bucket, queue, held] of [
-      ['p1', p1ActionTimes, p1Queue, p1HeldDirs],
-      ['p2', p2ActionTimes, p2Queue, p2HeldDirs],
+  function stepHeldMovement(now) {
+    if (state.roundOver || state.countdown > 0) return;
+    for (const [slotKind, held] of [
+      ['p1', p1HeldDirs],
+      ['p2', p2HeldDirs],
     ]) {
-      while (queue.length > 0 && consumeHumanAction(bucket, now)) {
-        const act = queue.shift();
-        executeHumanAction(slotKind, act, now);
-      }
-      if (queue.length === 0 && held.length > 0) {
-        const lastMove = slotKind === 'p1' ? state.lastP1Move : state.lastP2Move;
-        if (now - lastMove >= HUMAN_REPEAT_MS && consumeHumanAction(bucket, now)) {
-          executeHumanAction(slotKind, { a: 'm', dir: held[held.length - 1] }, now);
-        }
+      if (held.length === 0) continue;
+      const lastMove = slotKind === 'p1' ? state.lastP1Move : state.lastP2Move;
+      if (now - lastMove >= HOLD_REPEAT_MS) {
+        executeHumanAction(slotKind, { a: 'm', dir: held[held.length - 1] }, now);
       }
     }
   }
@@ -1728,8 +1686,9 @@ import {
 
     const dir = KEY_TO_DIR[e.key];
     if (dir && !e.repeat) {
+      recordMoveKey();
       pushHeldDir(p1HeldDirs, dir);
-      queueOrRunHumanAction('p1', { a: 'm', dir }, false, now);
+      executeHumanAction('p1', { a: 'm', dir }, now);
     }
     if ((e.code === 'Space' || e.key === ' ') && !e.repeat) {
       executeHumanAction('p1', { a: 'f' }, now);
@@ -1741,8 +1700,9 @@ import {
     if (state.netRole === 'solo' && state.mode2P) {
       const d2 = WASD_TO_DIR[e.code];
       if (d2 && !e.repeat) {
+        recordMoveKey();
         pushHeldDir(p2HeldDirs, d2);
-        queueOrRunHumanAction('p2', { a: 'm', dir: d2 }, false, now);
+        executeHumanAction('p2', { a: 'm', dir: d2 }, now);
       }
       if (e.code === 'KeyF' && !e.repeat) {
         executeHumanAction('p2', { a: 'f' }, now);
@@ -1928,6 +1888,7 @@ import {
   function loop(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
+    updateKps(now);
     update(dt);
     renderer.draw(state, theme);
     requestAnimationFrame(loop);
