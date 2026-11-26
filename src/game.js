@@ -1845,7 +1845,7 @@ import {
   });
 
   // --- Start & Main Loop ---
-  startRound(true, false);
+  startRound(true, true);
   updateNetUI({ role: 'solo', roomCode: '', text: 'Solo', tone: 'neutral', rttMs: null, natType: '' });
 
   const inviteCode = getRoomFromUrl();
