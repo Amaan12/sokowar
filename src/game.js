@@ -112,17 +112,25 @@ import {
 
   iceTextarea.value = getSavedIceJson();
 
-  // --- Focus & 6 KPS Human Rate Cap ---
+  // --- Focus & 6 KPS Human Rate Cap + Action Queue ---
   const HUMAN_MAX_KPS = 6;
   const HUMAN_REPEAT_MS = Math.ceil(1000 / HUMAN_MAX_KPS);
+  const MAX_INPUT_QUEUE = 3;
   const p1ActionTimes = [];
   const p2ActionTimes = [];
+  const p1Queue = [];
+  const p2Queue = [];
 
   function consumeHumanAction(bucket, now, limit = HUMAN_MAX_KPS, windowMs = 1000) {
     while (bucket.length && now - bucket[0] >= windowMs) bucket.shift();
     if (bucket.length >= limit) return false;
     bucket.push(now);
     return true;
+  }
+
+  function clearInputQueues() {
+    p1Queue.length = 0;
+    p2Queue.length = 0;
   }
 
   function setFocusUI(focused) {
@@ -412,6 +420,7 @@ import {
     state.roundTimer = 0;
     state.countdown = withCountdown ? 3.0 : 0;
     lastCountdownBeepSec = withCountdown ? 3 : 0;
+    clearInputQueues();
     dirtyCells.clear();
 
     let aiCounter = 0;
@@ -1078,6 +1087,7 @@ import {
       pendingInputs = [];
       state.beams = [];
       state.particles = [];
+      clearInputQueues();
       lastCountdownBeepSec = Math.ceil(snap.cd || 0);
     }
 
@@ -1271,6 +1281,7 @@ import {
   function update(dt) {
     lastSimStepAt = performance.now();
     updateVisuals(dt);
+    drainHumanQueues(lastSimStepAt);
 
     if (state.netRole !== 'guest') {
       updateAuthoritative(dt);
@@ -1584,6 +1595,83 @@ import {
   const KEY_TO_DIR = { ArrowLeft: 'left', ArrowUp: 'up', ArrowRight: 'right', ArrowDown: 'down' };
   const WASD_TO_DIR = { KeyA: 'left', KeyW: 'up', KeyD: 'right', KeyS: 'down' };
 
+  function getControlledBot(slotKind) {
+    if (slotKind === 'p2') {
+      return state.netRole === 'solo' && state.mode2P ? state.bots[1] : null;
+    }
+    if (state.netRole === 'guest') {
+      return state.bots.find((b) => b.slot === state.mySlot) || null;
+    }
+    const p1 = state.bots[0];
+    return p1 && p1.isHuman ? p1 : null;
+  }
+
+  function executeHumanAction(slotKind, act, now) {
+    const bot = getControlledBot(slotKind);
+    if (!bot || bot.hp <= 0 || state.roundOver || state.countdown > 0) return;
+
+    if (slotKind === 'p1' && state.netRole === 'guest') {
+      const seq = ++inputSeq;
+      if (act.a === 'm') {
+        state.lastP1Move = now;
+        net.sendInput({ s: seq, a: 'm', d: DIR_TO_IDX[act.dir] });
+        if (pendingInputs.length < 30) pendingInputs.push({ seq, dir: act.dir });
+        tryMoveStep(state.grid, state.bots, bot, act.dir, { isPrediction: true });
+      } else {
+        net.sendInput({ s: seq, a: act.a });
+      }
+      return;
+    }
+
+    if (act.a === 'm') {
+      if (slotKind === 'p1') state.lastP1Move = now;
+      else state.lastP2Move = now;
+      moveBot(bot, act.dir);
+    } else if (act.a === 'f') {
+      botFire(bot);
+    } else if (act.a === 't') {
+      botPlaceTurret(bot);
+    }
+    if (state.netRole === 'host') flushHostDelta(true);
+  }
+
+  function queueOrRunHumanAction(slotKind, act, isRepeat, now) {
+    const bot = getControlledBot(slotKind);
+    if (!bot || bot.hp <= 0 || state.roundOver || state.countdown > 0) return;
+    const bucket = slotKind === 'p1' ? p1ActionTimes : p2ActionTimes;
+    const queue = slotKind === 'p1' ? p1Queue : p2Queue;
+    const lastMove = slotKind === 'p1' ? state.lastP1Move : state.lastP2Move;
+
+    if (isRepeat) {
+      if (queue.length === 0 && now - lastMove >= HUMAN_REPEAT_MS && consumeHumanAction(bucket, now)) {
+        executeHumanAction(slotKind, act, now);
+      }
+      return;
+    }
+
+    if (queue.length === 0 && consumeHumanAction(bucket, now)) {
+      executeHumanAction(slotKind, act, now);
+    } else if (queue.length < MAX_INPUT_QUEUE) {
+      queue.push(act);
+    }
+  }
+
+  function drainHumanQueues(now) {
+    if (state.roundOver || state.countdown > 0) {
+      clearInputQueues();
+      return;
+    }
+    for (const [slotKind, bucket, queue] of [
+      ['p1', p1ActionTimes, p1Queue],
+      ['p2', p2ActionTimes, p2Queue],
+    ]) {
+      while (queue.length > 0 && consumeHumanAction(bucket, now)) {
+        const act = queue.shift();
+        executeHumanAction(slotKind, act, now);
+      }
+    }
+  }
+
   window.addEventListener('keydown', (e) => {
     const tag = e.target?.tagName;
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
@@ -1604,84 +1692,33 @@ import {
       return;
     }
 
-    // Guest Input Path (0ms CSP + immediate WebRTC send, capped at 6 KPS)
-    if (state.netRole === 'guest') {
-      const local = state.bots.find((b) => b.slot === state.mySlot);
-      if (!local || local.hp <= 0 || state.roundOver || state.countdown > 0) return;
-
-      const dir = KEY_TO_DIR[e.key];
-      if (dir) {
-        if ((!e.repeat || now - state.lastP1Move >= HUMAN_REPEAT_MS) && consumeHumanAction(p1ActionTimes, now)) {
-          state.lastP1Move = now;
-          const seq = ++inputSeq;
-          net.sendInput({ s: seq, a: 'm', d: DIR_TO_IDX[dir] });
-          if (pendingInputs.length < 30) {
-            pendingInputs.push({ seq, dir });
-          }
-          tryMoveStep(state.grid, state.bots, local, dir, { isPrediction: true });
-        }
-        return;
-      }
-      if ((e.code === 'Space' || e.key === ' ') && !e.repeat) {
-        if (!consumeHumanAction(p1ActionTimes, now)) return;
-        net.sendInput({ s: ++inputSeq, a: 'f' });
-        return;
-      }
-      if ((e.key === 'Shift' || e.code === 'KeyX' || e.code === 'Enter') && !e.repeat) {
-        if (!consumeHumanAction(p1ActionTimes, now)) return;
-        net.sendInput({ s: ++inputSeq, a: 't' });
-        return;
-      }
+    const dir = KEY_TO_DIR[e.key];
+    if (dir) {
+      queueOrRunHumanAction('p1', { a: 'm', dir }, e.repeat, now);
+      return;
+    }
+    if ((e.code === 'Space' || e.key === ' ') && !e.repeat) {
+      queueOrRunHumanAction('p1', { a: 'f' }, false, now);
+      return;
+    }
+    if ((e.key === 'Shift' || e.code === 'KeyX' || e.code === 'Enter') && !e.repeat) {
+      queueOrRunHumanAction('p1', { a: 't' }, false, now);
       return;
     }
 
-    // Solo / Host Local P1 Controls (capped at 6 KPS)
-    const p1 = state.bots[0];
-    if (p1 && p1.isHuman) {
-      const dir = KEY_TO_DIR[e.key];
-      if (dir) {
-        if ((!e.repeat || now - state.lastP1Move >= HUMAN_REPEAT_MS) && consumeHumanAction(p1ActionTimes, now)) {
-          state.lastP1Move = now;
-          moveBot(p1, dir);
-          if (state.netRole === 'host') flushHostDelta(true);
-        }
-        return;
-      }
-      if ((e.code === 'Space' || e.key === ' ') && !e.repeat) {
-        if (!consumeHumanAction(p1ActionTimes, now)) return;
-        botFire(p1);
-        if (state.netRole === 'host') flushHostDelta(true);
-        return;
-      }
-      if ((e.key === 'Shift' || e.code === 'KeyX' || e.code === 'Enter') && !e.repeat) {
-        if (!consumeHumanAction(p1ActionTimes, now)) return;
-        botPlaceTurret(p1);
-        if (state.netRole === 'host') flushHostDelta(true);
-        return;
-      }
-    }
-
     if (state.netRole === 'solo' && state.mode2P) {
-      const p2 = state.bots[1];
-      if (p2 && p2.isHuman) {
-        const d2 = WASD_TO_DIR[e.code];
-        if (d2) {
-          if ((!e.repeat || now - state.lastP2Move >= HUMAN_REPEAT_MS) && consumeHumanAction(p2ActionTimes, now)) {
-            state.lastP2Move = now;
-            moveBot(p2, d2);
-          }
-          return;
-        }
-        if (e.code === 'KeyF' && !e.repeat) {
-          if (!consumeHumanAction(p2ActionTimes, now)) return;
-          botFire(p2);
-          return;
-        }
-        if (e.code === 'KeyG' && !e.repeat) {
-          if (!consumeHumanAction(p2ActionTimes, now)) return;
-          botPlaceTurret(p2);
-          return;
-        }
+      const d2 = WASD_TO_DIR[e.code];
+      if (d2) {
+        queueOrRunHumanAction('p2', { a: 'm', dir: d2 }, e.repeat, now);
+        return;
+      }
+      if (e.code === 'KeyF' && !e.repeat) {
+        queueOrRunHumanAction('p2', { a: 'f' }, false, now);
+        return;
+      }
+      if (e.code === 'KeyG' && !e.repeat) {
+        queueOrRunHumanAction('p2', { a: 't' }, false, now);
+        return;
       }
     }
   });
