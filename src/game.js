@@ -49,7 +49,6 @@ import {
   const soundBtn = document.getElementById('sound-btn');
   const seedLabel = document.getElementById('seed-label');
   const roundLabel = document.getElementById('round-label');
-  const kpsEl = document.getElementById('kps-val');
   const rosterEl = document.getElementById('roster');
   const p2HintEl = document.getElementById('p2-hint');
 
@@ -113,7 +112,19 @@ import {
 
   iceTextarea.value = getSavedIceJson();
 
-  // --- Focus & KPS ---
+  // --- Focus & 6 KPS Human Rate Cap ---
+  const HUMAN_MAX_KPS = 6;
+  const HUMAN_REPEAT_MS = Math.ceil(1000 / HUMAN_MAX_KPS);
+  const p1ActionTimes = [];
+  const p2ActionTimes = [];
+
+  function consumeHumanAction(bucket, now, limit = HUMAN_MAX_KPS, windowMs = 1000) {
+    while (bucket.length && now - bucket[0] >= windowMs) bucket.shift();
+    if (bucket.length >= limit) return false;
+    bucket.push(now);
+    return true;
+  }
+
   function setFocusUI(focused) {
     focusHint.style.opacity = focused ? '0' : '1';
   }
@@ -125,15 +136,6 @@ import {
     ensureAudio();
   });
   setFocusUI(document.hasFocus());
-
-  const keyTimestamps = [];
-  function recordKey() {
-    keyTimestamps.push(performance.now());
-  }
-  function updateKps(now) {
-    while (keyTimestamps.length && now - keyTimestamps[0] > 1500) keyTimestamps.shift();
-    kpsEl.textContent = (keyTimestamps.length / 1.5).toFixed(1);
-  }
 
   // --- Authoritative & Client State ---
   const state = {
@@ -1412,7 +1414,7 @@ import {
           return { error: `Room full (max ${NET_CFG.MAX_PLAYERS} players)` };
         }
         const safeName = String(data?.name || `P${slot + 1}`).trim().toUpperCase().slice(0, 10) || `P${slot + 1}`;
-        entry = { peerId, slot, name: safeName, lastSeq: 0, spectating: true, pingMs: null, natType: 'P2P' };
+        entry = { peerId, slot, name: safeName, lastSeq: 0, spectating: true, pingMs: null, natType: 'P2P', actionTimes: [] };
         guestRoster.set(peerId, entry);
       }
 
@@ -1442,7 +1444,11 @@ import {
       }
       if (entry.spectating) return;
       const bot = state.bots.find((b) => b.slot === entry.slot);
-      if (!bot || bot.hp <= 0 || state.roundOver) {
+      if (!bot || bot.hp <= 0 || state.roundOver || state.countdown > 0) {
+        markStateDirty();
+        return;
+      }
+      if (!consumeHumanAction(entry.actionTimes, performance.now(), HUMAN_MAX_KPS, 940)) {
         markStateDirty();
         return;
       }
@@ -1598,15 +1604,14 @@ import {
       return;
     }
 
-    // Guest Input Path (0ms CSP + immediate WebRTC send)
+    // Guest Input Path (0ms CSP + immediate WebRTC send, capped at 6 KPS)
     if (state.netRole === 'guest') {
       const local = state.bots.find((b) => b.slot === state.mySlot);
       if (!local || local.hp <= 0 || state.roundOver || state.countdown > 0) return;
 
       const dir = KEY_TO_DIR[e.key];
       if (dir) {
-        if (!e.repeat || now - state.lastP1Move >= 90) {
-          if (!e.repeat) recordKey();
+        if ((!e.repeat || now - state.lastP1Move >= HUMAN_REPEAT_MS) && consumeHumanAction(p1ActionTimes, now)) {
           state.lastP1Move = now;
           const seq = ++inputSeq;
           net.sendInput({ s: seq, a: 'm', d: DIR_TO_IDX[dir] });
@@ -1618,25 +1623,24 @@ import {
         return;
       }
       if ((e.code === 'Space' || e.key === ' ') && !e.repeat) {
-        recordKey();
+        if (!consumeHumanAction(p1ActionTimes, now)) return;
         net.sendInput({ s: ++inputSeq, a: 'f' });
         return;
       }
       if ((e.key === 'Shift' || e.code === 'KeyX' || e.code === 'Enter') && !e.repeat) {
-        recordKey();
+        if (!consumeHumanAction(p1ActionTimes, now)) return;
         net.sendInput({ s: ++inputSeq, a: 't' });
         return;
       }
       return;
     }
 
-    // Solo / Host Local P1 Controls
+    // Solo / Host Local P1 Controls (capped at 6 KPS)
     const p1 = state.bots[0];
     if (p1 && p1.isHuman) {
       const dir = KEY_TO_DIR[e.key];
       if (dir) {
-        if (!e.repeat || now - state.lastP1Move >= 90) {
-          if (!e.repeat) recordKey();
+        if ((!e.repeat || now - state.lastP1Move >= HUMAN_REPEAT_MS) && consumeHumanAction(p1ActionTimes, now)) {
           state.lastP1Move = now;
           moveBot(p1, dir);
           if (state.netRole === 'host') flushHostDelta(true);
@@ -1644,13 +1648,13 @@ import {
         return;
       }
       if ((e.code === 'Space' || e.key === ' ') && !e.repeat) {
-        recordKey();
+        if (!consumeHumanAction(p1ActionTimes, now)) return;
         botFire(p1);
         if (state.netRole === 'host') flushHostDelta(true);
         return;
       }
       if ((e.key === 'Shift' || e.code === 'KeyX' || e.code === 'Enter') && !e.repeat) {
-        recordKey();
+        if (!consumeHumanAction(p1ActionTimes, now)) return;
         botPlaceTurret(p1);
         if (state.netRole === 'host') flushHostDelta(true);
         return;
@@ -1662,20 +1666,19 @@ import {
       if (p2 && p2.isHuman) {
         const d2 = WASD_TO_DIR[e.code];
         if (d2) {
-          if (!e.repeat || now - state.lastP2Move >= 90) {
-            if (!e.repeat) recordKey();
+          if ((!e.repeat || now - state.lastP2Move >= HUMAN_REPEAT_MS) && consumeHumanAction(p2ActionTimes, now)) {
             state.lastP2Move = now;
             moveBot(p2, d2);
           }
           return;
         }
         if (e.code === 'KeyF' && !e.repeat) {
-          recordKey();
+          if (!consumeHumanAction(p2ActionTimes, now)) return;
           botFire(p2);
           return;
         }
         if (e.code === 'KeyG' && !e.repeat) {
-          recordKey();
+          if (!consumeHumanAction(p2ActionTimes, now)) return;
           botPlaceTurret(p2);
           return;
         }
@@ -1858,7 +1861,6 @@ import {
   function loop(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    updateKps(now);
     update(dt);
     renderer.draw(state, theme);
     requestAnimationFrame(loop);

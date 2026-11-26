@@ -103,10 +103,6 @@
       </div>
 
       <div class="flex flex-wrap items-center gap-2">
-        <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-[var(--background)] border border-[var(--border)] text-xs">
-          <span class="text-[var(--muted-foreground)]">KPS</span>
-          <span id="kps-val" class="font-mono font-semibold tabular-nums text-[var(--primary)]">0.0</span>
-        </div>
         <button id="new-map-btn" class="px-2.5 py-1 rounded-md text-xs font-medium bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 transition-opacity cursor-pointer font-mono">
           [N] New Map
         </button>
@@ -240,6 +236,7 @@
             <div><span class="font-mono text-[var(--foreground)]">Arrows</span> Move &amp; push boxes</div>
             <div><span class="font-mono text-[var(--foreground)]">Space</span> Fire laser beam</div>
             <div><span class="font-mono text-[var(--foreground)]">Shift / X</span> Drop auto-turret</div>
+            <div><span class="font-mono text-[var(--foreground)]">6 KPS</span> Input limited to 6/sec</div>
             <div id="p2-hint" class="hidden"><span class="font-mono text-[var(--foreground)]">WASD + F/G</span> Player 2 controls</div>
             <div class="pt-1 border-t border-[var(--border)] space-y-0.5">
               <div><span class="font-mono text-[var(--foreground)]">/ \</span> Mirrors reflect beams (2 DMG)</div>
@@ -277,6 +274,6 @@
     </div>
   </div>
 
-  <script type="module" src="./src/game.js?v=8"></script>
+  <script type="module" src="./src/game.js?v=9"></script>
 </body>
 </html>
