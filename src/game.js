@@ -12,6 +12,8 @@ import {
   isSoundEnabled,
   setSoundEnabled,
   sfxBoom,
+  sfxCountdownGo,
+  sfxCountdownTick,
   sfxHealSpawn,
   sfxHit,
   sfxLaser,
@@ -156,6 +158,7 @@ import {
     roundOver: false,
     roundWinner: null,
     roundTimer: 0,
+    countdown: 0,
     shakeTime: 0,
     shakeAmp: 0,
     lastP1Move: 0,
@@ -172,6 +175,7 @@ import {
   let lastDeltaSentAt = 0;
   let lastPeriodicSyncAt = 0;
   let lastSimStepAt = performance.now();
+  let lastCountdownBeepSec = 0;
   let peerMetaList = []; // [[slot, name, pingMs, natType, spectating], ...]
   let netTraffic = { txRate: 0, rxRate: 0, natType: '' };
 
@@ -365,7 +369,7 @@ import {
     return { totalCount, sortedGuests };
   }
 
-  function startRound(newSeed = false) {
+  function startRound(newSeed = false, withCountdown = true) {
     if (state.netRole === 'guest') return; // Host-authoritative
 
     if (newSeed) {
@@ -404,6 +408,8 @@ import {
     state.roundOver = false;
     state.roundWinner = null;
     state.roundTimer = 0;
+    state.countdown = withCountdown ? 3.0 : 0;
+    lastCountdownBeepSec = withCountdown ? 3 : 0;
     dirtyCells.clear();
 
     let aiCounter = 0;
@@ -484,7 +490,7 @@ import {
   }
 
   function tryMoveStep(grid, bots, bot, dir, { isPrediction = false } = {}) {
-    if (state.roundOver || bot.hp <= 0) return false;
+    if (state.roundOver || state.countdown > 0 || bot.hp <= 0) return false;
     bot.dir = dir;
     const [dx, dy] = DIR_VEC[dir];
     const nx = bot.x + dx;
@@ -736,7 +742,7 @@ import {
   }
 
   function botFire(bot) {
-    if (state.roundOver || bot.hp <= 0 || bot.fireCd > 0) return;
+    if (state.roundOver || state.countdown > 0 || bot.hp <= 0 || bot.fireCd > 0) return;
     bot.fireCd = bot.overdrive > 0 ? 0.16 : 0.36;
     emitSfx('laser');
     fireLaserFrom(bot.x, bot.y, bot.dir, bot);
@@ -744,7 +750,7 @@ import {
   }
 
   function botPlaceTurret(bot) {
-    if (state.roundOver || bot.hp <= 0 || bot.turretCd > 0) return;
+    if (state.roundOver || state.countdown > 0 || bot.hp <= 0 || bot.turretCd > 0) return;
     bot.turretCd = 0.9;
     state.turrets = state.turrets.filter((t) => t.ownerId !== bot.id);
     state.turrets.push({
@@ -787,7 +793,7 @@ import {
   }
 
   function stepAI(bot, dt) {
-    if (bot.isHuman || bot.hp <= 0 || state.roundOver) return;
+    if (bot.isHuman || bot.hp <= 0 || state.roundOver || state.countdown > 0) return;
     if (bot.telegraph > 0) {
       bot.telegraph -= dt;
       if (bot.telegraph <= 0) botFire(bot);
@@ -919,6 +925,7 @@ import {
       pk: serializePickups(),
       pp: serializePending(),
       ro: [state.roundOver ? 1 : 0, state.roundWinner ? state.roundWinner.slot : -1, state.wins],
+      cd: Number(state.countdown.toFixed(2)),
       ack: buildAckMap(),
       peers: buildPeersMeta(),
     };
@@ -947,6 +954,7 @@ import {
       pk: serializePickups(),
       pp: serializePending(),
       ro: [state.roundOver ? 1 : 0, state.roundWinner ? state.roundWinner.slot : -1, state.round, state.wins],
+      cd: Number(state.countdown.toFixed(2)),
       peers: buildPeersMeta(),
     });
     renderStatsPanel();
@@ -1068,6 +1076,7 @@ import {
       pendingInputs = [];
       state.beams = [];
       state.particles = [];
+      lastCountdownBeepSec = Math.ceil(snap.cd || 0);
     }
 
     applyBotsFromNet(snap.bots, Boolean(snap.isRoundStart));
@@ -1077,6 +1086,7 @@ import {
     state.roundOver = Boolean(ro);
     state.roundWinner = winnerSlot >= 0 ? state.bots.find((b) => b.slot === winnerSlot) || null : null;
     state.wins = winsMap || {};
+    state.countdown = typeof snap.cd === 'number' ? snap.cd : 0;
 
     if (snap.peers) peerMetaList = snap.peers;
 
@@ -1108,6 +1118,9 @@ import {
       state.round = round;
       state.wins = winsMap || {};
       roundLabel.textContent = `Round ${state.round}`;
+    }
+    if (typeof delta.cd === 'number') {
+      state.countdown = delta.cd;
     }
 
     reconcileLocalPrediction(delta.ack?.[state.mySlot]);
@@ -1175,9 +1188,27 @@ import {
       state.roundTimer -= dt;
       if (state.roundTimer <= 0) {
         state.round++;
-        startRound(false);
+        startRound(false, true);
         return;
       }
+    }
+
+    if (state.countdown > 0) {
+      state.countdown = Math.max(0, state.countdown - dt);
+      const nextSec = Math.ceil(state.countdown);
+      if (state.countdown === 0) {
+        if (lastCountdownBeepSec > 0) {
+          lastCountdownBeepSec = 0;
+          sfxCountdownGo();
+        }
+        markStateDirty();
+        if (state.netRole === 'host') flushHostDelta(true);
+      } else if (nextSec < lastCountdownBeepSec) {
+        lastCountdownBeepSec = nextSec;
+        sfxCountdownTick();
+        markStateDirty();
+      }
+      return;
     }
 
     for (const b of state.bots) {
@@ -1245,7 +1276,18 @@ import {
         flushHostDelta(false);
       }
     } else {
-      // Guest smoothly interpolates local pending countdown visuals
+      // Guest smoothly interpolates countdown & local pending countdown visuals
+      if (state.countdown > 0) {
+        state.countdown = Math.max(0, state.countdown - dt);
+        const nextSec = Math.ceil(state.countdown);
+        if (state.countdown === 0 && lastCountdownBeepSec > 0) {
+          lastCountdownBeepSec = 0;
+          sfxCountdownGo();
+        } else if (nextSec > 0 && nextSec < lastCountdownBeepSec) {
+          lastCountdownBeepSec = nextSec;
+          sfxCountdownTick();
+        }
+      }
       for (const pp of state.pendingPickups) {
         pp.remaining = Math.max(0, pp.remaining - dt);
       }
@@ -1559,7 +1601,7 @@ import {
     // Guest Input Path (0ms CSP + immediate WebRTC send)
     if (state.netRole === 'guest') {
       const local = state.bots.find((b) => b.slot === state.mySlot);
-      if (!local || local.hp <= 0 || state.roundOver) return;
+      if (!local || local.hp <= 0 || state.roundOver || state.countdown > 0) return;
 
       const dir = KEY_TO_DIR[e.key];
       if (dir) {
@@ -1803,7 +1845,7 @@ import {
   });
 
   // --- Start & Main Loop ---
-  startRound(true);
+  startRound(true, false);
   updateNetUI({ role: 'solo', roomCode: '', text: 'Solo', tone: 'neutral', rttMs: null, natType: '' });
 
   const inviteCode = getRoomFromUrl();

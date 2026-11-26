@@ -46,3 +46,5 @@ export const sfxBoom = () => playTone(95, 0.25, 'sawtooth', 0.12, 32);
 export const sfxPickup = () => playTone(587, 0.1, 'triangle', 0.07, 880);
 export const sfxTurret = () => playTone(440, 0.08, 'sine', 0.05, 660);
 export const sfxHealSpawn = () => playTone(660, 0.07, 'sine', 0.04, 880);
+export const sfxCountdownTick = () => playTone(520, 0.05, 'sine', 0.04);
+export const sfxCountdownGo = () => playTone(880, 0.11, 'triangle', 0.06, 1040);

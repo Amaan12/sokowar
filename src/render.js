@@ -374,6 +374,31 @@ export function createRenderer({ canvas, stageWrap }) {
       ctx.restore();
     }
 
+    // Round Start 3s Countdown Overlay
+    if (state.countdown > 0 && !state.roundOver) {
+      const sec = Math.max(1, Math.ceil(state.countdown));
+      const frac = state.countdown - Math.floor(state.countdown);
+      ctx.save();
+      roundRect(ctx, W / 2 - 92, H / 2 - 46, 184, 92, 14);
+      fillAlpha(theme.bg, 0.88);
+      strokeAlpha(theme.primary, 0.85, 1.8);
+
+      ctx.beginPath();
+      ctx.arc(W / 2, H / 2 + 8, 22, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (frac || 1));
+      strokeAlpha(theme.primary, 0.45, 2.5);
+
+      ctx.fillStyle = theme.muted;
+      ctx.font = '600 11px "Montserrat", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`ROUND ${state.round}`, W / 2, H / 2 - 26);
+
+      ctx.fillStyle = theme.primary;
+      ctx.font = '800 32px "Montserrat", system-ui, sans-serif';
+      ctx.fillText(String(sec), W / 2, H / 2 + 9);
+      ctx.restore();
+    }
+
     // Round Over Banner
     if (state.roundOver) {
       ctx.save();
